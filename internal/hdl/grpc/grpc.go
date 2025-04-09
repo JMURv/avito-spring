@@ -4,44 +4,29 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/JMURv/golang-clean-template/api/grpc/v1/gen"
-	"github.com/JMURv/golang-clean-template/internal/ctrl"
-	"github.com/JMURv/golang-clean-template/internal/hdl/grpc/interceptors"
-	metrics "github.com/JMURv/golang-clean-template/internal/observability/metrics/prometheus"
-	pm "github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus"
-	ot "github.com/opentracing/opentracing-go"
+	gen "github.com/JMURv/avito-spring/api/grpc/v1/gen"
+	"github.com/JMURv/avito-spring/internal/ctrl"
+	"github.com/JMURv/avito-spring/internal/hdl"
+	"github.com/JMURv/avito-spring/internal/models/mapper"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
+	"google.golang.org/grpc/status"
 	"net"
-	"time"
 )
 
 type Handler struct {
-	gen.AppServer
+	gen.PVZServiceServer
 	srv  *grpc.Server
 	hsrv *health.Server
 	ctrl ctrl.AppCtrl
 }
 
 func New(name string, ctrl ctrl.AppCtrl) *Handler {
-	srv := grpc.NewServer(
-		grpc.ChainUnaryInterceptor(
-			interceptors.AuthUnaryInterceptor(),
-			metrics.SrvMetrics.UnaryServerInterceptor(
-				pm.WithExemplarFromContext(metrics.Exemplar),
-			),
-		),
-		grpc.ChainStreamInterceptor(
-			metrics.SrvMetrics.StreamServerInterceptor(
-				pm.WithExemplarFromContext(metrics.Exemplar),
-			),
-		),
-	)
-
+	srv := grpc.NewServer()
 	reflection.Register(srv)
 
 	hsrv := health.NewServer()
@@ -54,36 +39,40 @@ func New(name string, ctrl ctrl.AppCtrl) *Handler {
 }
 
 func (h *Handler) Start(port int) {
-	gen.RegisterAppServer(h.srv, h)
+	gen.RegisterPVZServiceServer(h.srv, h)
 	grpc_health_v1.RegisterHealthServer(h.srv, h.hsrv)
 
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%v", port))
+	portStr := fmt.Sprintf(":%v", port)
+	lis, err := net.Listen("tcp", portStr)
 	if err != nil {
 		zap.L().Fatal("failed to listen", zap.Error(err))
 	}
 
 	zap.L().Info(
 		"Starting GRPC server",
-		zap.String("addr", lis.Addr().String()),
+		zap.String("addr", portStr),
 	)
 	if err = h.srv.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
 		zap.L().Fatal("failed to serve", zap.Error(err))
 	}
 }
 
-func (h *Handler) Close() error {
+func (h *Handler) Close(_ context.Context) error {
 	h.srv.GracefulStop()
 	return nil
 }
 
-func (h *Handler) Procedure(ctx context.Context, req *gen.Empty) (*gen.Empty, error) {
-	const op = "app.Procedure.hdl"
-	s, c := time.Now(), codes.OK
-	span, ctx := ot.StartSpanFromContext(ctx, op)
-	defer func() {
-		span.Finish()
-		metrics.ObserveRequest(time.Since(s), int(c), op)
-	}()
+func (h *Handler) GetPVZList(ctx context.Context, req *gen.GetPVZListRequest) (*gen.GetPVZListResponse, error) {
+	if req == nil {
+		return nil, status.Errorf(codes.InvalidArgument, hdl.ErrDecodeRequest.Error())
+	}
 
-	return &gen.Empty{}, nil
+	res, err := h.ctrl.GetPVZList(ctx)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, hdl.ErrInternal.Error())
+	}
+
+	return &gen.GetPVZListResponse{
+		Pvzs: mapper.ListPVZsToProto(res),
+	}, nil
 }

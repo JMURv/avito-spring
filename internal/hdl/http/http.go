@@ -3,9 +3,10 @@ package http
 import (
 	"context"
 	"fmt"
-	"github.com/JMURv/golang-clean-template/internal/ctrl"
-	mid "github.com/JMURv/golang-clean-template/internal/hdl/http/middleware"
-	"github.com/JMURv/golang-clean-template/internal/hdl/http/utils"
+	"github.com/JMURv/avito-spring/internal/auth"
+	"github.com/JMURv/avito-spring/internal/ctrl"
+	mid "github.com/JMURv/avito-spring/internal/hdl/http/middleware"
+	"github.com/JMURv/avito-spring/internal/hdl/http/utils"
 	"go.uber.org/zap"
 	"net/http"
 	"time"
@@ -14,25 +15,27 @@ import (
 type Handler struct {
 	srv  *http.Server
 	ctrl ctrl.AppCtrl
+	au   auth.Core
 }
 
-func New(ctrl ctrl.AppCtrl) *Handler {
+func New(ctrl ctrl.AppCtrl, au auth.Core) *Handler {
 	return &Handler{
 		ctrl: ctrl,
+		au:   au,
 	}
 }
 
 func (h *Handler) Start(port int) {
 	mux := http.NewServeMux()
 
-	RegisterRoutes(mux, h)
+	RegisterRoutes(mux, h, h.au)
 	mux.HandleFunc(
 		"/health", func(w http.ResponseWriter, r *http.Request) {
 			utils.SuccessResponse(w, http.StatusOK, "OK")
 		},
 	)
 
-	handler := mid.Logging(mux)
+	handler := mid.LogMetrics(mux)
 	handler = mid.RecoverPanic(handler)
 	h.srv = &http.Server{
 		Handler:      handler,

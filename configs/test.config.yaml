@@ -4,6 +4,7 @@ secret: "DYHlaJpPiZ"
 
 server:
   port: 8080
+  grpc_port: 3000
   scheme: "http"
   domain: "localhost"
 
@@ -14,6 +15,5 @@ db:
   password: "app_password"
   database: "app_db_test"
 
-redis:
-  addr: "localhost:6379"
-  pass: ""
+prometheus:
+  port: 9000

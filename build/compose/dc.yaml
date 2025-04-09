@@ -1,0 +1,72 @@
+services:
+  db:
+    container_name: db
+    image: postgres:15.0-alpine
+    restart: always
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_PORT=${POSTGRES_PORT}
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    healthcheck:
+      test: 'psql -w -U ${POSTGRES_USER} -d ${POSTGRES_DB} -h localhost -c "SELECT 1"'
+      interval: 5s
+      timeout: 2s
+      retries: 5
+      start_period: 5s
+    volumes:
+      - avito-spring-db-data:/var/lib/postgresql/data
+    networks: [app]
+
+  app:
+    container_name: app
+    restart: unless-stopped
+    build:
+      context: ../../
+      dockerfile: build/docker/Dockerfile
+    volumes:
+      - ../../configs/config.yaml:/configs/config.yaml
+    ports:
+      - "${APP_PORT}:${APP_PORT}"
+      - "${APP_GRPC_PORT}:${APP_GRPC_PORT}"
+      - "${APP_METRICS_PORT}:${APP_METRICS_PORT}"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:${APP_PORT}/health" ]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      db:
+        condition: service_healthy
+        restart: true
+    networks: [app]
+
+  prometheus:
+    container_name: prometheus
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prom/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-pp:/prometheus
+    restart: always
+    networks: [ app ]
+
+  node-exp:
+    container_name: node-exp
+    image: prom/node-exporter
+    ports:
+      - "9100:9100"
+    restart: always
+    networks: [ app ]
+
+volumes:
+  avito-spring-db-data:
+  prometheus-pp:
+
+networks:
+  app:
+    name: app

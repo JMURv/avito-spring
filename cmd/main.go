@@ -2,21 +2,20 @@ package main
 
 import (
 	"context"
-	"github.com/JMURv/golang-clean-template/internal/auth"
-	"github.com/JMURv/golang-clean-template/internal/cache/redis"
-	"github.com/JMURv/golang-clean-template/internal/config"
-	"github.com/JMURv/golang-clean-template/internal/ctrl"
-	"github.com/JMURv/golang-clean-template/internal/hdl/http"
-	"github.com/JMURv/golang-clean-template/internal/observability/metrics/prometheus"
-	"github.com/JMURv/golang-clean-template/internal/observability/tracing/jaeger"
-	"github.com/JMURv/golang-clean-template/internal/repo/db"
+	"github.com/JMURv/avito-spring/internal/auth"
+	"github.com/JMURv/avito-spring/internal/config"
+	"github.com/JMURv/avito-spring/internal/ctrl"
+	"github.com/JMURv/avito-spring/internal/hdl/grpc"
+	"github.com/JMURv/avito-spring/internal/hdl/http"
+	"github.com/JMURv/avito-spring/internal/observability/metrics/prometheus"
+	"github.com/JMURv/avito-spring/internal/repo/db"
 	"go.uber.org/zap"
 	"os"
 	"os/signal"
 	"syscall"
 )
 
-const configPath = "configs/local.config.yaml"
+const configPath = "configs/config.yaml"
 
 func mustRegisterLogger(mode string) {
 	switch mode {
@@ -40,28 +39,27 @@ func main() {
 	conf := config.MustLoad(configPath)
 	mustRegisterLogger(conf.Mode)
 
-	go prometheus.New(conf.Server.Port + 5).Start(ctx)
-	go jaeger.Start(ctx, conf.ServiceName, conf)
-
-	auth.New(conf.Secret)
-	cache := redis.New(conf)
+	au := auth.New(conf)
 	repo := db.New(conf)
-	svc := ctrl.New(repo, cache)
-	h := http.New(svc)
+	svc := ctrl.New(repo, au)
+	hdl := http.New(svc, au)
+	ghdl := grpc.New(conf.ServiceName, svc)
 
-	go h.Start(conf.Server.Port)
+	go prometheus.New(conf.Prometheus.Port).Start(ctx)
+	go hdl.Start(conf.Server.Port)
+	go ghdl.Start(conf.Server.GRPCPort)
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	<-c
 
 	zap.L().Info("Shutting down gracefully...")
-	if err := h.Close(ctx); err != nil {
+	if err := hdl.Close(ctx); err != nil {
 		zap.L().Warn("Error closing handler", zap.Error(err))
 	}
 
-	if err := cache.Close(); err != nil {
-		zap.L().Warn("Failed to close connection to cache: ", zap.Error(err))
+	if err := ghdl.Close(ctx); err != nil {
+		zap.L().Warn("Error closing handler", zap.Error(err))
 	}
 
 	if err := repo.Close(); err != nil {

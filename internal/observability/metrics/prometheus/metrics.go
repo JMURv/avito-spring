@@ -3,7 +3,6 @@ package prometheus
 import (
 	"context"
 	"fmt"
-	grpcprom "github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -13,16 +12,6 @@ import (
 	"strconv"
 	"time"
 )
-
-var SrvMetrics = grpcprom.NewServerMetrics(
-	grpcprom.WithServerHandlingTimeHistogram(
-		grpcprom.WithHistogramBuckets([]float64{0.001, 0.01, 0.1, 0.3, 0.6, 1, 3, 6, 9, 20, 30, 60, 90, 120}),
-	),
-)
-
-var Exemplar = func(ctx context.Context) prometheus.Labels {
-	return prometheus.Labels{"traceID": strconv.Itoa(1)}
-}
 
 type Metric struct {
 	srv *http.Server
@@ -40,8 +29,11 @@ func New(port int) *Metric {
 
 func (m *Metric) Start(ctx context.Context) {
 	m.reg.MustRegister(
-		SrvMetrics,
 		RequestMetrics,
+		RequestCount,
+		CreatedPVZ,
+		CreatedOrderReceipts,
+		AddedProducts,
 		collectors.NewGoCollector(),
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
 	)
@@ -57,7 +49,11 @@ func (m *Metric) Start(ctx context.Context) {
 	)
 
 	m.srv.Handler = mux
-	go m.srv.ListenAndServe()
+	go func() {
+		if err := m.srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			zap.L().Fatal("Prometheus server failed", zap.Error(err))
+		}
+	}()
 
 	zap.L().Debug(fmt.Sprintf("Prometheus server has been started on port:%v", m.srv.Addr))
 
@@ -68,6 +64,11 @@ func (m *Metric) Start(ctx context.Context) {
 	zap.L().Debug("Prometheus server has been stopped")
 }
 
+func ObserveRequest(d time.Duration, status int, endpoint string) {
+	RequestMetrics.WithLabelValues(strconv.Itoa(status), endpoint).Observe(d.Seconds())
+	RequestCount.WithLabelValues(strconv.Itoa(status), endpoint).Inc()
+}
+
 var RequestMetrics = promauto.NewSummaryVec(
 	prometheus.SummaryOpts{
 		Namespace:  "svc",
@@ -76,6 +77,35 @@ var RequestMetrics = promauto.NewSummaryVec(
 	}, []string{"status", "endpoint"},
 )
 
-func ObserveRequest(d time.Duration, status int, endpoint string) {
-	RequestMetrics.WithLabelValues(strconv.Itoa(status), endpoint).Observe(d.Seconds())
-}
+var RequestCount = promauto.NewCounterVec(
+	prometheus.CounterOpts{
+		Namespace: "svc",
+		Name:      "request_count_total",
+		Help:      "Total number of requests",
+	},
+	[]string{"status", "endpoint"},
+)
+
+var CreatedPVZ = promauto.NewCounter(
+	prometheus.CounterOpts{
+		Namespace: "svc",
+		Name:      "created_pvz_total",
+		Help:      "Total number of created PVZ",
+	},
+)
+
+var CreatedOrderReceipts = promauto.NewCounter(
+	prometheus.CounterOpts{
+		Namespace: "svc",
+		Name:      "created_order_receipts_total",
+		Help:      "Total number of created order receptions",
+	},
+)
+
+var AddedProducts = promauto.NewCounter(
+	prometheus.CounterOpts{
+		Namespace: "svc",
+		Name:      "added_products_total",
+		Help:      "Total number of added products",
+	},
+)

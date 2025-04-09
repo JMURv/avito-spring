@@ -13,8 +13,9 @@ RUN apk add upx
 RUN upx ./main
 
 FROM scratch
-COPY ./internal/repo/db/migration /app/internal/repo/db/migration
-COPY --from=builder /app/go.mod ./go.mod
+ENV MIGRATIONS_PATH=.
+
+COPY ./internal/repo/db/migration ./
 COPY --from=builder /app/main ./
 
 EXPOSE 8080
