@@ -9,6 +9,7 @@ import (
 	mid "github.com/JMURv/avito-spring/internal/hdl/http/middleware"
 	"github.com/JMURv/avito-spring/internal/hdl/http/utils"
 	md "github.com/JMURv/avito-spring/internal/models"
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 	"net/http"
@@ -17,75 +18,32 @@ import (
 	"time"
 )
 
-func RegisterRoutes(mux *http.ServeMux, h *Handler, au auth.Core) {
-	mux.HandleFunc(
-		"/dummyLogin", mid.Apply(
-			h.dummyLogin,
-			mid.AllowedMethods(http.MethodPost),
-		),
-	)
-	mux.HandleFunc(
-		"/register", mid.Apply(
-			h.register,
-			mid.AllowedMethods(http.MethodPost),
-		),
-	)
-	mux.HandleFunc(
-		"/login", mid.Apply(
-			h.login,
-			mid.AllowedMethods(http.MethodPost),
-		),
-	)
-
-	mux.HandleFunc(
-		"/pvz", func(w http.ResponseWriter, r *http.Request) {
-			switch r.Method {
-			case http.MethodGet:
-				mid.Apply(
-					h.getPVZ,
-					mid.AllowedMethods(http.MethodGet),
-					mid.Auth(au, md.ModeratorRole, md.EmployeeRole),
-				)(w, r)
-			case http.MethodPost:
-				mid.Apply(
-					h.createPVZ,
-					mid.AllowedMethods(http.MethodPost),
-					mid.Auth(au, md.ModeratorRole),
-				)(w, r)
-			}
+func (h *Handler) registerRoutes() {
+	h.router.Get(
+		"/health", func(w http.ResponseWriter, r *http.Request) {
+			utils.SuccessResponse(w, http.StatusOK, "OK")
 		},
 	)
 
-	mux.HandleFunc(
-		"/pvz/{id}/close_last_reception", mid.Apply(
-			h.closeLastReception,
-			mid.AllowedMethods(http.MethodPost),
-			mid.Auth(au),
-		),
-	)
-	mux.HandleFunc(
-		"/pvz/{id}/delete_last_product", mid.Apply(
-			h.deleteLastProduct,
-			mid.AllowedMethods(http.MethodPost),
-			mid.Auth(au, md.EmployeeRole),
-		),
+	h.router.Post("/dummyLogin", h.dummyLogin)
+	h.router.Post("/register", h.register)
+	h.router.Post("/login", h.login)
+	h.router.Route(
+		"/pvz", func(r chi.Router) {
+			r.With(mid.Auth(h.au, md.ModeratorRole, md.EmployeeRole)).Get("/", h.getPVZ)
+			r.With(mid.Auth(h.au, md.ModeratorRole)).Post("/", h.createPVZ)
+
+			r.Route(
+				"/{id}", func(r chi.Router) {
+					r.With(mid.Auth(h.au)).Post("/close_last_reception", h.closeLastReception)
+					r.With(mid.Auth(h.au, md.EmployeeRole)).Post("/delete_last_product", h.deleteLastProduct)
+				},
+			)
+		},
 	)
 
-	mux.HandleFunc(
-		"/receptions", mid.Apply(
-			h.createReception,
-			mid.AllowedMethods(http.MethodPost),
-			mid.Auth(au, md.EmployeeRole),
-		),
-	)
-
-	mux.HandleFunc(
-		"/products", mid.Apply(
-			h.addItemToReception,
-			mid.AllowedMethods(http.MethodPost),
-			mid.Auth(au, md.EmployeeRole),
-		),
-	)
+	h.router.With(mid.Auth(h.au, md.EmployeeRole)).Post("/receptions", h.createReception)
+	h.router.With(mid.Auth(h.au, md.EmployeeRole)).Post("/products", h.addItemToReception)
 }
 
 func (h *Handler) dummyLogin(w http.ResponseWriter, r *http.Request) {

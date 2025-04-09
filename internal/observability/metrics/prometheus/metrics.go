@@ -55,7 +55,7 @@ func (m *Metric) Start(ctx context.Context) {
 		}
 	}()
 
-	zap.L().Debug(fmt.Sprintf("Prometheus server has been started on port:%v", m.srv.Addr))
+	zap.L().Info("Starting prometheus server", zap.String("add", m.srv.Addr))
 
 	<-ctx.Done()
 	if err := m.srv.Shutdown(ctx); err != nil {

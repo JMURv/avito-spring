@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"github.com/JMURv/avito-spring/internal/config"
 	jwt "github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
@@ -93,6 +94,10 @@ func (a *Auth) ParseClaims(_ context.Context, tokenStr string) (Claims, error) {
 	)
 
 	if err != nil {
+		if errors.Is(err, jwt.ErrTokenExpired) || errors.Is(err, jwt.ErrTokenMalformed) {
+			return claims, err
+		}
+
 		zap.L().Error(
 			"Failed to parse claims",
 			zap.String("token", tokenStr),

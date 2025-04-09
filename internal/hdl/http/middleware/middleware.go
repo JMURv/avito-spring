@@ -7,7 +7,6 @@ import (
 	"github.com/JMURv/avito-spring/internal/auth"
 	"github.com/JMURv/avito-spring/internal/hdl/http/utils"
 	metrics "github.com/JMURv/avito-spring/internal/observability/metrics/prometheus"
-	"go.uber.org/zap"
 	"net/http"
 	"slices"
 	"strings"
@@ -17,16 +16,6 @@ import (
 var ErrNotAuthorized = errors.New("not authorized")
 var ErrAuthHeaderIsMissing = errors.New("authorization header is missing")
 var ErrInvalidTokenFormat = errors.New("invalid token format")
-
-func Apply(h http.HandlerFunc, middleware ...func(http.Handler) http.Handler) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var handler http.Handler = h
-		for _, m := range middleware {
-			handler = m(handler)
-		}
-		handler.ServeHTTP(w, r)
-	}
-}
 
 func Auth(au auth.Core, allowedRole ...string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -56,39 +45,10 @@ func Auth(au auth.Core, allowedRole ...string) func(http.Handler) http.Handler {
 						return
 					}
 				}
+
 				ctx := context.WithValue(r.Context(), "role", claims.Role)
 				ctx = context.WithValue(ctx, "uid", claims.UID)
 				next.ServeHTTP(w, r.WithContext(ctx))
-			},
-		)
-	}
-}
-
-func RecoverPanic(next http.Handler) http.Handler {
-	return http.HandlerFunc(
-		func(w http.ResponseWriter, r *http.Request) {
-			defer func() {
-				if err := recover(); err != nil {
-					zap.L().Error("panic", zap.Any("err", err))
-					utils.ErrResponse(w, http.StatusInternalServerError, errors.New("internal error"))
-				}
-			}()
-			next.ServeHTTP(w, r)
-		},
-	)
-}
-
-var ErrMethodNotAllowed = errors.New("method not allowed")
-
-func AllowedMethods(methods ...string) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(
-			func(w http.ResponseWriter, r *http.Request) {
-				if ok := slices.Contains(methods, r.Method); !ok {
-					utils.ErrResponse(w, http.StatusMethodNotAllowed, ErrMethodNotAllowed)
-					return
-				}
-				next.ServeHTTP(w, r)
 			},
 		)
 	}
@@ -108,21 +68,13 @@ func (lrw *LoggingResponseWriter) WriteHeader(code int) {
 	lrw.ResponseWriter.WriteHeader(code)
 }
 
-func LogMetrics(next http.Handler) http.Handler {
+func PromMetrics(next http.Handler) http.Handler {
 	return http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			s := time.Now()
 			lrw := NewLoggingResponseWriter(w)
 			next.ServeHTTP(lrw, r)
 			metrics.ObserveRequest(time.Since(s), lrw.statusCode, fmt.Sprintf("%s %s", r.Method, r.RequestURI))
-
-			zap.L().Info(
-				"<--",
-				zap.String("method", r.Method),
-				zap.Int("status", lrw.statusCode),
-				zap.Any("duration", time.Since(s)),
-				zap.String("uri", r.RequestURI),
-			)
 		},
 	)
 }

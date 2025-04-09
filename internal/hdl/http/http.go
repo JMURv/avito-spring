@@ -6,39 +6,41 @@ import (
 	"github.com/JMURv/avito-spring/internal/auth"
 	"github.com/JMURv/avito-spring/internal/ctrl"
 	mid "github.com/JMURv/avito-spring/internal/hdl/http/middleware"
-	"github.com/JMURv/avito-spring/internal/hdl/http/utils"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"go.uber.org/zap"
 	"net/http"
 	"time"
 )
 
 type Handler struct {
-	srv  *http.Server
-	ctrl ctrl.AppCtrl
-	au   auth.Core
+	router *chi.Mux
+	srv    *http.Server
+	ctrl   ctrl.AppCtrl
+	au     auth.Core
 }
 
 func New(ctrl ctrl.AppCtrl, au auth.Core) *Handler {
+	r := chi.NewRouter()
 	return &Handler{
-		ctrl: ctrl,
-		au:   au,
+		router: r,
+		ctrl:   ctrl,
+		au:     au,
 	}
 }
 
 func (h *Handler) Start(port int) {
-	mux := http.NewServeMux()
-
-	RegisterRoutes(mux, h, h.au)
-	mux.HandleFunc(
-		"/health", func(w http.ResponseWriter, r *http.Request) {
-			utils.SuccessResponse(w, http.StatusOK, "OK")
-		},
+	h.router.Use(
+		middleware.RequestID,
+		middleware.RealIP,
+		middleware.Recoverer,
+		middleware.Logger,
+		mid.PromMetrics,
 	)
 
-	handler := mid.LogMetrics(mux)
-	handler = mid.RecoverPanic(handler)
+	h.registerRoutes()
 	h.srv = &http.Server{
-		Handler:      handler,
+		Handler:      h.router,
 		Addr:         fmt.Sprintf(":%v", port),
 		WriteTimeout: 15 * time.Second,
 		ReadTimeout:  15 * time.Second,
