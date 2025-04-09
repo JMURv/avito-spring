@@ -44,7 +44,7 @@ func TestRepository_GetUserByEmail(t *testing.T) {
 		{
 			name: "Success",
 			setup: func() {
-				rows := sqlmock.NewRows([]string{"id", "email", "password", "role"}).
+				rows := sqlmock.NewRows([]string{"id", "email", "password_hash", "role"}).
 					AddRow(testUser.ID.String(), testUser.Email, testUser.Password, testUser.Role)
 
 				mock.ExpectQuery(regexp.QuoteMeta(getUserByEmail)).
