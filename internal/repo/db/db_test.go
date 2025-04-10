@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"github.com/JMURv/avito-spring/internal/dto"
+	dto "github.com/JMURv/avito-spring/internal/dto/gen"
 	md "github.com/JMURv/avito-spring/internal/models"
 	repo2 "github.com/JMURv/avito-spring/internal/repo"
 	"github.com/google/uuid"
@@ -112,7 +112,7 @@ func TestRepository_CreateUser(t *testing.T) {
 	testID := uuid.New()
 	testErr := errors.New("insert error")
 
-	req := &dto.RegisterRequest{
+	req := &dto.RegisterPostReq{
 		Email:    "test@example.com",
 		Password: "securehash",
 		Role:     "admin",
@@ -183,14 +183,14 @@ func TestRepository_CreatePVZ(t *testing.T) {
 	tests := []struct {
 		name     string
 		setup    func()
-		req      *dto.CreatePVZRequest
+		req      *dto.PVZ
 		wantID   uuid.UUID
 		wantTime time.Time
 		wantErr  error
 	}{
 		{
 			name: "Success",
-			req:  &dto.CreatePVZRequest{City: testCity},
+			req:  &dto.PVZ{City: dto.PVZCity(testCity)},
 			setup: func() {
 				rows := sqlmock.NewRows([]string{"id", "created_at"}).
 					AddRow(testID.String(), testTime)
@@ -205,7 +205,7 @@ func TestRepository_CreatePVZ(t *testing.T) {
 		},
 		{
 			name: "InvalidCity_PG_22P02",
-			req:  &dto.CreatePVZRequest{City: "123_invalid"},
+			req:  &dto.PVZ{City: "123_invalid"},
 			setup: func() {
 				pgErr := &pgconn.PgError{Code: "22P02"}
 				mock.ExpectQuery(regexp.QuoteMeta(createPVZ)).
@@ -218,7 +218,7 @@ func TestRepository_CreatePVZ(t *testing.T) {
 		},
 		{
 			name: "Generic DB Error",
-			req:  &dto.CreatePVZRequest{City: "St.Petersburg"},
+			req:  &dto.PVZ{City: "St.Petersburg"},
 			setup: func() {
 				mock.ExpectQuery(regexp.QuoteMeta(createPVZ)).
 					WithArgs("St.Petersburg").
@@ -354,10 +354,13 @@ func TestRepository_CloseLastReception(t *testing.T) {
 	ctx := context.Background()
 
 	receptionID := uuid.New()
-	testReception := md.Reception{
-		ID:       receptionID,
+	testReception := dto.Reception{
+		ID: dto.OptUUID{
+			Value: receptionID,
+			Set:   true,
+		},
 		DateTime: time.Now(),
-		PVZID:    uuid.New(),
+		PvzId:    uuid.New(),
 		Status:   "in_progress",
 	}
 
@@ -373,18 +376,18 @@ func TestRepository_CloseLastReception(t *testing.T) {
 				mock.ExpectBegin()
 				rows := sqlmock.NewRows([]string{"id", "created_at", "pickup_point_id", "status"}).
 					AddRow(
-						testReception.ID.String(),
+						testReception.ID.Value.String(),
 						testReception.DateTime,
-						testReception.PVZID.String(),
+						testReception.PvzId.String(),
 						testReception.Status,
 					)
 
-				mock.ExpectQuery(regexp.QuoteMeta(findLastReception)).
+				mock.ExpectQuery(regexp.QuoteMeta(findLastReceptionForUpdate)).
 					WithArgs(receptionID).
 					WillReturnRows(rows)
 
 				mock.ExpectExec(regexp.QuoteMeta(closeReception)).
-					WithArgs(testReception.ID).
+					WithArgs(testReception.ID.Value.String()).
 					WillReturnResult(sqlmock.NewResult(1, 1))
 
 				mock.ExpectCommit()
@@ -396,7 +399,7 @@ func TestRepository_CloseLastReception(t *testing.T) {
 			name: "ReceptionAlreadyClosed (no rows)",
 			setup: func() {
 				mock.ExpectBegin()
-				mock.ExpectQuery(regexp.QuoteMeta(findLastReception)).
+				mock.ExpectQuery(regexp.QuoteMeta(findLastReceptionForUpdate)).
 					WithArgs(receptionID).
 					WillReturnError(sql.ErrNoRows)
 				mock.ExpectRollback()
@@ -408,7 +411,7 @@ func TestRepository_CloseLastReception(t *testing.T) {
 			name: "GetContext error",
 			setup: func() {
 				mock.ExpectBegin()
-				mock.ExpectQuery(regexp.QuoteMeta(findLastReception)).
+				mock.ExpectQuery(regexp.QuoteMeta(findLastReceptionForUpdate)).
 					WithArgs(receptionID).
 					WillReturnError(errors.New("db get error"))
 				mock.ExpectRollback()
@@ -422,18 +425,18 @@ func TestRepository_CloseLastReception(t *testing.T) {
 				mock.ExpectBegin()
 				rows := sqlmock.NewRows([]string{"id", "created_at", "pickup_point_id", "status"}).
 					AddRow(
-						testReception.ID.String(),
+						testReception.ID.Value.String(),
 						testReception.DateTime,
-						testReception.PVZID.String(),
+						testReception.PvzId.String(),
 						testReception.Status,
 					)
 
-				mock.ExpectQuery(regexp.QuoteMeta(findLastReception)).
+				mock.ExpectQuery(regexp.QuoteMeta(findLastReceptionForUpdate)).
 					WithArgs(receptionID).
 					WillReturnRows(rows)
 
 				mock.ExpectExec(regexp.QuoteMeta(closeReception)).
-					WithArgs(testReception.ID).
+					WithArgs(testReception.ID.Value.String()).
 					WillReturnError(errors.New("exec error"))
 				mock.ExpectRollback()
 			},
@@ -446,18 +449,18 @@ func TestRepository_CloseLastReception(t *testing.T) {
 				mock.ExpectBegin()
 				rows := sqlmock.NewRows([]string{"id", "created_at", "pickup_point_id", "status"}).
 					AddRow(
-						testReception.ID.String(),
+						testReception.ID.Value.String(),
 						testReception.DateTime,
-						testReception.PVZID.String(),
+						testReception.PvzId.String(),
 						testReception.Status,
 					)
 
-				mock.ExpectQuery(regexp.QuoteMeta(findLastReception)).
+				mock.ExpectQuery(regexp.QuoteMeta(findLastReceptionForUpdate)).
 					WithArgs(receptionID).
 					WillReturnRows(rows)
 
 				mock.ExpectExec(regexp.QuoteMeta(closeReception)).
-					WithArgs(testReception.ID).
+					WithArgs(testReception.ID.Value.String()).
 					WillReturnResult(sqlmock.NewResult(1, 1))
 
 				mock.ExpectCommit().WillReturnError(errors.New("commit error"))
@@ -526,7 +529,7 @@ func TestRepository_DeleteLastProduct(t *testing.T) {
 						testReception.PVZID.String(),
 						testReception.Status,
 					)
-				mock.ExpectQuery(regexp.QuoteMeta(findLastReceptionForUpdate)).
+				mock.ExpectQuery(regexp.QuoteMeta(findLastReception)).
 					WithArgs(receptionID).
 					WillReturnRows(rows)
 
@@ -542,7 +545,7 @@ func TestRepository_DeleteLastProduct(t *testing.T) {
 			name: "NoActiveReception",
 			setup: func() {
 				mock.ExpectBegin()
-				mock.ExpectQuery(regexp.QuoteMeta(findLastReceptionForUpdate)).
+				mock.ExpectQuery(regexp.QuoteMeta(findLastReception)).
 					WithArgs(receptionID).
 					WillReturnError(sql.ErrNoRows)
 				mock.ExpectRollback()
@@ -561,7 +564,7 @@ func TestRepository_DeleteLastProduct(t *testing.T) {
 						testReception.PVZID.String(),
 						testReception.Status,
 					)
-				mock.ExpectQuery(regexp.QuoteMeta(findLastReceptionForUpdate)).
+				mock.ExpectQuery(regexp.QuoteMeta(findLastReception)).
 					WithArgs(receptionID).
 					WillReturnRows(rows)
 
@@ -577,7 +580,7 @@ func TestRepository_DeleteLastProduct(t *testing.T) {
 			name: "GetContextError",
 			setup: func() {
 				mock.ExpectBegin()
-				mock.ExpectQuery(regexp.QuoteMeta(findLastReceptionForUpdate)).
+				mock.ExpectQuery(regexp.QuoteMeta(findLastReception)).
 					WithArgs(receptionID).
 					WillReturnError(errors.New("db get error"))
 				mock.ExpectRollback()
@@ -596,7 +599,7 @@ func TestRepository_DeleteLastProduct(t *testing.T) {
 						testReception.PVZID.String(),
 						testReception.Status,
 					)
-				mock.ExpectQuery(regexp.QuoteMeta(findLastReceptionForUpdate)).
+				mock.ExpectQuery(regexp.QuoteMeta(findLastReception)).
 					WithArgs(receptionID).
 					WillReturnRows(rows)
 
@@ -619,7 +622,7 @@ func TestRepository_DeleteLastProduct(t *testing.T) {
 						testReception.PVZID.String(),
 						testReception.Status,
 					)
-				mock.ExpectQuery(regexp.QuoteMeta(findLastReceptionForUpdate)).
+				mock.ExpectQuery(regexp.QuoteMeta(findLastReception)).
 					WithArgs(receptionID).
 					WillReturnRows(rows)
 
@@ -661,12 +664,15 @@ func TestRepository_CreateReception(t *testing.T) {
 	repo := Repository{conn: db}
 	ctx := context.Background()
 
-	req := &dto.CreateReceptionRequest{
-		PVZID: uuid.New(),
+	req := &dto.ReceptionsPostReq{
+		PvzId: uuid.New(),
 	}
-	testResponse := dto.CreateReceptionResponse{
-		ID:       uuid.New(),
-		PVZID:    req.PVZID,
+	testResponse := dto.Reception{
+		ID: dto.OptUUID{
+			Value: uuid.New(),
+			Set:   true,
+		},
+		PvzId:    req.PvzId,
 		Status:   "open",
 		DateTime: time.Now(),
 	}
@@ -675,7 +681,7 @@ func TestRepository_CreateReception(t *testing.T) {
 		name       string
 		setup      func()
 		wantErr    error
-		wantResult *dto.CreateReceptionResponse
+		wantResult *dto.Reception
 	}{
 		{
 			name: "Success",
@@ -683,16 +689,16 @@ func TestRepository_CreateReception(t *testing.T) {
 				mock.ExpectBegin()
 
 				mock.ExpectQuery(regexp.QuoteMeta(findLastReceptionForUpdate)).
-					WithArgs(req.PVZID).
+					WithArgs(req.PvzId).
 					WillReturnError(sql.ErrNoRows)
 
 				mock.ExpectQuery(regexp.QuoteMeta(createReception)).
-					WithArgs(req.PVZID).
+					WithArgs(req.PvzId).
 					WillReturnRows(
 						sqlmock.NewRows([]string{"id", "pickup_point_id", "status", "created_at"}).
 							AddRow(
-								testResponse.ID.String(),
-								req.PVZID.String(),
+								testResponse.ID.Value.String(),
+								req.PvzId.String(),
 								testResponse.Status,
 								testResponse.DateTime,
 							),
@@ -709,10 +715,15 @@ func TestRepository_CreateReception(t *testing.T) {
 				mock.ExpectBegin()
 
 				mock.ExpectQuery(regexp.QuoteMeta(findLastReceptionForUpdate)).
-					WithArgs(req.PVZID).
+					WithArgs(req.PvzId).
 					WillReturnRows(
 						sqlmock.NewRows([]string{"id", "pickup_point_id", "status", "created_at"}).
-							AddRow(testResponse.ID.String(), req.PVZID.String(), "in_progress", testResponse.DateTime),
+							AddRow(
+								testResponse.ID.Value.String(),
+								req.PvzId.String(),
+								"in_progress",
+								testResponse.DateTime,
+							),
 					)
 
 				mock.ExpectRollback()
@@ -726,7 +737,7 @@ func TestRepository_CreateReception(t *testing.T) {
 				mock.ExpectBegin()
 
 				mock.ExpectQuery(regexp.QuoteMeta(findLastReceptionForUpdate)).
-					WithArgs(req.PVZID).
+					WithArgs(req.PvzId).
 					WillReturnError(errors.New("db query error"))
 
 				mock.ExpectRollback()
@@ -740,11 +751,11 @@ func TestRepository_CreateReception(t *testing.T) {
 				mock.ExpectBegin()
 
 				mock.ExpectQuery(regexp.QuoteMeta(findLastReceptionForUpdate)).
-					WithArgs(req.PVZID).
+					WithArgs(req.PvzId).
 					WillReturnError(sql.ErrNoRows)
 
 				mock.ExpectQuery(regexp.QuoteMeta(createReception)).
-					WithArgs(req.PVZID).
+					WithArgs(req.PvzId).
 					WillReturnError(errors.New("db create error"))
 
 				mock.ExpectRollback()
@@ -758,16 +769,16 @@ func TestRepository_CreateReception(t *testing.T) {
 				mock.ExpectBegin()
 
 				mock.ExpectQuery(regexp.QuoteMeta(findLastReceptionForUpdate)).
-					WithArgs(req.PVZID).
+					WithArgs(req.PvzId).
 					WillReturnError(sql.ErrNoRows)
 
 				mock.ExpectQuery(regexp.QuoteMeta(createReception)).
-					WithArgs(req.PVZID).
+					WithArgs(req.PvzId).
 					WillReturnRows(
 						sqlmock.NewRows([]string{"id", "pickup_point_id", "status", "created_at"}).
 							AddRow(
-								testResponse.ID.String(),
-								req.PVZID.String(),
+								testResponse.ID.Value.String(),
+								req.PvzId.String(),
 								testResponse.Status,
 								testResponse.DateTime,
 							),
@@ -817,8 +828,8 @@ func TestRepository_AddItemToReception(t *testing.T) {
 	pvzID := uuid.New()
 	receptionID := uuid.New()
 
-	req := &dto.AddItemRequest{
-		PVZID: pvzID,
+	req := &dto.ProductsPostReq{
+		PvzId: pvzID,
 		Type:  "fragile",
 	}
 	testReception := md.Reception{
@@ -827,18 +838,25 @@ func TestRepository_AddItemToReception(t *testing.T) {
 		PVZID:    pvzID,
 		Status:   "open",
 	}
-	testResp := dto.AddItemResponse{
-		ID:          uuid.New(),
-		Type:        req.Type,
-		ReceptionID: receptionID,
-		DateTime:    time.Now(),
+
+	testResp := dto.Product{
+		ID: dto.OptUUID{
+			Value: uuid.New(),
+			Set:   true,
+		},
+		Type:        dto.ProductType(req.Type),
+		ReceptionId: receptionID,
+		DateTime: dto.OptDateTime{
+			Value: time.Now(),
+			Set:   true,
+		},
 	}
 
 	tests := []struct {
 		name       string
 		setup      func()
 		wantErr    error
-		wantResult *dto.AddItemResponse
+		wantResult *dto.Product
 	}{
 		{
 			name: "Success",
@@ -860,10 +878,10 @@ func TestRepository_AddItemToReception(t *testing.T) {
 					WillReturnRows(
 						sqlmock.NewRows([]string{"id", "type", "reception_id", "created_at"}).
 							AddRow(
-								testResp.ID.String(),
+								testResp.ID.Value.String(),
 								testResp.Type,
-								testResp.ReceptionID.String(),
-								testResp.DateTime,
+								testResp.ReceptionId.String(),
+								testResp.DateTime.Value,
 							),
 					)
 			},

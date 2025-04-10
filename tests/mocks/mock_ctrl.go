@@ -14,7 +14,7 @@ import (
 	reflect "reflect"
 	time "time"
 
-	dto "github.com/JMURv/avito-spring/internal/dto"
+	dto "github.com/JMURv/avito-spring/internal/dto/gen"
 	models "github.com/JMURv/avito-spring/internal/models"
 	uuid "github.com/google/uuid"
 	gomock "go.uber.org/mock/gomock"
@@ -45,10 +45,10 @@ func (m *MockAppRepo) EXPECT() *MockAppRepoMockRecorder {
 }
 
 // AddItemToReception mocks base method.
-func (m *MockAppRepo) AddItemToReception(ctx context.Context, req *dto.AddItemRequest) (*dto.AddItemResponse, error) {
+func (m *MockAppRepo) AddItemToReception(ctx context.Context, req *dto.ProductsPostReq) (*dto.Product, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AddItemToReception", ctx, req)
-	ret0, _ := ret[0].(*dto.AddItemResponse)
+	ret0, _ := ret[0].(*dto.Product)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -60,10 +60,10 @@ func (mr *MockAppRepoMockRecorder) AddItemToReception(ctx, req any) *gomock.Call
 }
 
 // CloseLastReception mocks base method.
-func (m *MockAppRepo) CloseLastReception(ctx context.Context, id uuid.UUID) (*models.Reception, error) {
+func (m *MockAppRepo) CloseLastReception(ctx context.Context, id uuid.UUID) (*dto.Reception, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CloseLastReception", ctx, id)
-	ret0, _ := ret[0].(*models.Reception)
+	ret0, _ := ret[0].(*dto.Reception)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -75,7 +75,7 @@ func (mr *MockAppRepoMockRecorder) CloseLastReception(ctx, id any) *gomock.Call 
 }
 
 // CreatePVZ mocks base method.
-func (m *MockAppRepo) CreatePVZ(ctx context.Context, req *dto.CreatePVZRequest) (uuid.UUID, time.Time, error) {
+func (m *MockAppRepo) CreatePVZ(ctx context.Context, req *dto.PVZ) (uuid.UUID, time.Time, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreatePVZ", ctx, req)
 	ret0, _ := ret[0].(uuid.UUID)
@@ -91,10 +91,10 @@ func (mr *MockAppRepoMockRecorder) CreatePVZ(ctx, req any) *gomock.Call {
 }
 
 // CreateReception mocks base method.
-func (m *MockAppRepo) CreateReception(ctx context.Context, req *dto.CreateReceptionRequest) (*dto.CreateReceptionResponse, error) {
+func (m *MockAppRepo) CreateReception(ctx context.Context, req *dto.ReceptionsPostReq) (*dto.Reception, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateReception", ctx, req)
-	ret0, _ := ret[0].(*dto.CreateReceptionResponse)
+	ret0, _ := ret[0].(*dto.Reception)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -106,7 +106,7 @@ func (mr *MockAppRepoMockRecorder) CreateReception(ctx, req any) *gomock.Call {
 }
 
 // CreateUser mocks base method.
-func (m *MockAppRepo) CreateUser(ctx context.Context, req *dto.RegisterRequest) (uuid.UUID, error) {
+func (m *MockAppRepo) CreateUser(ctx context.Context, req *dto.RegisterPostReq) (uuid.UUID, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateUser", ctx, req)
 	ret0, _ := ret[0].(uuid.UUID)
@@ -135,10 +135,10 @@ func (mr *MockAppRepoMockRecorder) DeleteLastProduct(ctx, id any) *gomock.Call {
 }
 
 // GetPVZ mocks base method.
-func (m *MockAppRepo) GetPVZ(ctx context.Context, page, limit int64, startDate, endDate time.Time) ([]*dto.GetPVZResponse, error) {
+func (m *MockAppRepo) GetPVZ(ctx context.Context, page, limit int64, startDate, endDate time.Time) ([]*dto.PvzGetOKItem, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetPVZ", ctx, page, limit, startDate, endDate)
-	ret0, _ := ret[0].([]*dto.GetPVZResponse)
+	ret0, _ := ret[0].([]*dto.PvzGetOKItem)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -204,10 +204,10 @@ func (m *MockAppCtrl) EXPECT() *MockAppCtrlMockRecorder {
 }
 
 // AddItemToReception mocks base method.
-func (m *MockAppCtrl) AddItemToReception(ctx context.Context, req *dto.AddItemRequest) (*dto.AddItemResponse, error) {
+func (m *MockAppCtrl) AddItemToReception(ctx context.Context, req *dto.ProductsPostReq) (*dto.Product, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AddItemToReception", ctx, req)
-	ret0, _ := ret[0].(*dto.AddItemResponse)
+	ret0, _ := ret[0].(*dto.Product)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -219,10 +219,10 @@ func (mr *MockAppCtrlMockRecorder) AddItemToReception(ctx, req any) *gomock.Call
 }
 
 // CloseLastReception mocks base method.
-func (m *MockAppCtrl) CloseLastReception(ctx context.Context, id uuid.UUID) (*models.Reception, error) {
+func (m *MockAppCtrl) CloseLastReception(ctx context.Context, id uuid.UUID) (*dto.Reception, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CloseLastReception", ctx, id)
-	ret0, _ := ret[0].(*models.Reception)
+	ret0, _ := ret[0].(*dto.Reception)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -234,10 +234,10 @@ func (mr *MockAppCtrlMockRecorder) CloseLastReception(ctx, id any) *gomock.Call 
 }
 
 // CreatePVZ mocks base method.
-func (m *MockAppCtrl) CreatePVZ(ctx context.Context, req *dto.CreatePVZRequest) (*dto.CreatePVZResponse, error) {
+func (m *MockAppCtrl) CreatePVZ(ctx context.Context, req *dto.PVZ) (*dto.PVZ, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreatePVZ", ctx, req)
-	ret0, _ := ret[0].(*dto.CreatePVZResponse)
+	ret0, _ := ret[0].(*dto.PVZ)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -249,10 +249,10 @@ func (mr *MockAppCtrlMockRecorder) CreatePVZ(ctx, req any) *gomock.Call {
 }
 
 // CreateReception mocks base method.
-func (m *MockAppCtrl) CreateReception(ctx context.Context, req *dto.CreateReceptionRequest) (*dto.CreateReceptionResponse, error) {
+func (m *MockAppCtrl) CreateReception(ctx context.Context, req *dto.ReceptionsPostReq) (*dto.Reception, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateReception", ctx, req)
-	ret0, _ := ret[0].(*dto.CreateReceptionResponse)
+	ret0, _ := ret[0].(*dto.Reception)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -278,10 +278,10 @@ func (mr *MockAppCtrlMockRecorder) DeleteLastProduct(ctx, id any) *gomock.Call {
 }
 
 // DummyLogin mocks base method.
-func (m *MockAppCtrl) DummyLogin(ctx context.Context, req *dto.DummyLoginRequest) (*dto.DummyLoginResponse, error) {
+func (m *MockAppCtrl) DummyLogin(ctx context.Context, req *dto.DummyLoginPostReq) (dto.Token, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DummyLogin", ctx, req)
-	ret0, _ := ret[0].(*dto.DummyLoginResponse)
+	ret0, _ := ret[0].(dto.Token)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -293,10 +293,10 @@ func (mr *MockAppCtrlMockRecorder) DummyLogin(ctx, req any) *gomock.Call {
 }
 
 // GetPVZ mocks base method.
-func (m *MockAppCtrl) GetPVZ(ctx context.Context, page, limit int64, startDate, endDate time.Time) ([]*dto.GetPVZResponse, error) {
+func (m *MockAppCtrl) GetPVZ(ctx context.Context, page, limit int64, startDate, endDate time.Time) ([]*dto.PvzGetOKItem, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetPVZ", ctx, page, limit, startDate, endDate)
-	ret0, _ := ret[0].([]*dto.GetPVZResponse)
+	ret0, _ := ret[0].([]*dto.PvzGetOKItem)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -323,10 +323,10 @@ func (mr *MockAppCtrlMockRecorder) GetPVZList(ctx any) *gomock.Call {
 }
 
 // Login mocks base method.
-func (m *MockAppCtrl) Login(ctx context.Context, req *dto.LoginRequest) (*dto.LoginResponse, error) {
+func (m *MockAppCtrl) Login(ctx context.Context, req *dto.LoginPostReq) (dto.Token, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Login", ctx, req)
-	ret0, _ := ret[0].(*dto.LoginResponse)
+	ret0, _ := ret[0].(dto.Token)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -338,10 +338,10 @@ func (mr *MockAppCtrlMockRecorder) Login(ctx, req any) *gomock.Call {
 }
 
 // Register mocks base method.
-func (m *MockAppCtrl) Register(ctx context.Context, req *dto.RegisterRequest) (*dto.RegisterResponse, error) {
+func (m *MockAppCtrl) Register(ctx context.Context, req *dto.RegisterPostReq) (*dto.User, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Register", ctx, req)
-	ret0, _ := ret[0].(*dto.RegisterResponse)
+	ret0, _ := ret[0].(*dto.User)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

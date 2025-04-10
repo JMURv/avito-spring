@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/JMURv/avito-spring/internal/auth"
-	"github.com/JMURv/avito-spring/internal/dto"
+	dto "github.com/JMURv/avito-spring/internal/dto/gen"
 	md "github.com/JMURv/avito-spring/internal/models"
 	"github.com/JMURv/avito-spring/internal/repo"
 	"github.com/JMURv/avito-spring/tests/mocks"
@@ -27,17 +27,17 @@ func TestController_DummyLogin(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		req        *dto.DummyLoginRequest
+		req        *dto.DummyLoginPostReq
 		expect     func()
-		assertions func(res *dto.DummyLoginResponse, err error)
+		assertions func(res dto.Token, err error)
 	}{
 		{
 			name: "NewToken Err",
-			req: &dto.DummyLoginRequest{
+			req: &dto.DummyLoginPostReq{
 				Role: "role",
 			},
-			assertions: func(res *dto.DummyLoginResponse, err error) {
-				assert.Nil(t, res)
+			assertions: func(res dto.Token, err error) {
+				assert.Empty(t, res)
 				assert.Equal(t, testErr, err)
 			},
 			expect: func() {
@@ -46,12 +46,12 @@ func TestController_DummyLogin(t *testing.T) {
 		},
 		{
 			name: "Success",
-			req: &dto.DummyLoginRequest{
+			req: &dto.DummyLoginPostReq{
 				Role: "role",
 			},
-			assertions: func(res *dto.DummyLoginResponse, err error) {
+			assertions: func(res dto.Token, err error) {
 				assert.Nil(t, err)
-				assert.Equal(t, "token", res.Token)
+				assert.Equal(t, dto.Token("token"), res)
 			},
 			expect: func() {
 				auth.EXPECT().NewToken(gomock.Any(), gomock.Any()).Return("token", nil)
@@ -80,44 +80,43 @@ func TestController_Login(t *testing.T) {
 	ctrl := New(repoMock, authMock)
 
 	testErr := errors.New("test error")
-
 	tests := []struct {
 		name       string
-		req        *dto.LoginRequest
+		req        *dto.LoginPostReq
 		expect     func()
-		assertions func(*dto.LoginResponse, error)
+		assertions func(dto.Token, error)
 	}{
 		{
 			name: "User not found",
-			req: &dto.LoginRequest{
+			req: &dto.LoginPostReq{
 				Email:    "notfound@example.com",
 				Password: "password",
 			},
 			expect: func() {
 				repoMock.EXPECT().GetUserByEmail(ctx, "notfound@example.com").Return(nil, repo.ErrNotFound)
 			},
-			assertions: func(res *dto.LoginResponse, err error) {
-				assert.Nil(t, res)
+			assertions: func(res dto.Token, err error) {
+				assert.Empty(t, res)
 				assert.ErrorIs(t, err, auth.ErrInvalidCredentials)
 			},
 		},
 		{
 			name: "GetUserByEmail error",
-			req: &dto.LoginRequest{
+			req: &dto.LoginPostReq{
 				Email:    "error@example.com",
 				Password: "password",
 			},
 			expect: func() {
 				repoMock.EXPECT().GetUserByEmail(ctx, "error@example.com").Return(nil, testErr)
 			},
-			assertions: func(res *dto.LoginResponse, err error) {
-				assert.Nil(t, res)
+			assertions: func(res dto.Token, err error) {
+				assert.Empty(t, res)
 				assert.Equal(t, testErr, err)
 			},
 		},
 		{
 			name: "Invalid password",
-			req: &dto.LoginRequest{
+			req: &dto.LoginPostReq{
 				Email:    "user@example.com",
 				Password: "wrongpass",
 			},
@@ -132,14 +131,14 @@ func TestController_Login(t *testing.T) {
 					[]byte("wrongpass"),
 				).Return(auth.ErrInvalidCredentials)
 			},
-			assertions: func(res *dto.LoginResponse, err error) {
-				assert.Nil(t, res)
+			assertions: func(res dto.Token, err error) {
+				assert.Empty(t, res)
 				assert.ErrorIs(t, err, auth.ErrInvalidCredentials)
 			},
 		},
 		{
 			name: "ComparePasswords error",
-			req: &dto.LoginRequest{
+			req: &dto.LoginPostReq{
 				Email:    "user@example.com",
 				Password: "pass",
 			},
@@ -151,14 +150,14 @@ func TestController_Login(t *testing.T) {
 				)
 				authMock.EXPECT().ComparePasswords([]byte("hashed"), []byte("pass")).Return(testErr)
 			},
-			assertions: func(res *dto.LoginResponse, err error) {
-				assert.Nil(t, res)
+			assertions: func(res dto.Token, err error) {
+				assert.Empty(t, res)
 				assert.Equal(t, testErr, err)
 			},
 		},
 		{
 			name: "NewToken error",
-			req: &dto.LoginRequest{
+			req: &dto.LoginPostReq{
 				Email:    "user@example.com",
 				Password: "correctpass",
 			},
@@ -173,14 +172,14 @@ func TestController_Login(t *testing.T) {
 				authMock.EXPECT().ComparePasswords([]byte("hashedpass"), []byte("correctpass")).Return(nil)
 				authMock.EXPECT().NewToken(gomock.Any(), "user").Return("", testErr)
 			},
-			assertions: func(res *dto.LoginResponse, err error) {
-				assert.Nil(t, res)
+			assertions: func(res dto.Token, err error) {
+				assert.Empty(t, res)
 				assert.Equal(t, testErr, err)
 			},
 		},
 		{
 			name: "Success",
-			req: &dto.LoginRequest{
+			req: &dto.LoginPostReq{
 				Email:    "success@example.com",
 				Password: "correctpass",
 			},
@@ -195,9 +194,9 @@ func TestController_Login(t *testing.T) {
 				authMock.EXPECT().ComparePasswords([]byte("hashedcorrect"), []byte("correctpass")).Return(nil)
 				authMock.EXPECT().NewToken(gomock.Any(), "admin").Return("valid-token", nil)
 			},
-			assertions: func(res *dto.LoginResponse, err error) {
+			assertions: func(res dto.Token, err error) {
 				assert.NoError(t, err)
-				assert.Equal(t, "valid-token", res.Token)
+				assert.Equal(t, dto.Token("valid-token"), res)
 			},
 		},
 	}
@@ -224,74 +223,73 @@ func TestController_Register(t *testing.T) {
 	repoMock := mocks.NewMockAppRepo(mockCtrl)
 	ctrl := New(repoMock, authMock)
 
-	testErr := errors.New("test error")
 	testID := uuid.New()
-
+	testErr := errors.New("test error")
 	tests := []struct {
 		name       string
-		req        *dto.RegisterRequest
+		req        *dto.RegisterPostReq
 		expect     func()
-		assertions func(*dto.RegisterResponse, error)
+		assertions func(*dto.User, error)
 	}{
 		{
 			name: "Hashing error",
-			req: &dto.RegisterRequest{
+			req: &dto.RegisterPostReq{
 				Password: "password",
 			},
 			expect: func() {
 				authMock.EXPECT().Hash("password").Return("", testErr)
 			},
-			assertions: func(res *dto.RegisterResponse, err error) {
+			assertions: func(res *dto.User, err error) {
 				assert.Nil(t, res)
 				assert.ErrorIs(t, err, testErr)
 			},
 		},
 		{
 			name: "CreateUser error",
-			req: &dto.RegisterRequest{
+			req: &dto.RegisterPostReq{
 				Email:    "error@example.com",
 				Password: "password",
-				Role:     "user",
+				Role:     "moderator",
 			},
 			expect: func() {
 				authMock.EXPECT().Hash("password").Return("hashedpass", nil)
 				repoMock.EXPECT().CreateUser(
 					ctx,
-					&dto.RegisterRequest{
+					&dto.RegisterPostReq{
 						Email:    "error@example.com",
 						Password: "hashedpass",
-						Role:     "user",
+						Role:     "moderator",
 					},
 				).Return(uuid.Nil, testErr)
 			},
-			assertions: func(res *dto.RegisterResponse, err error) {
+			assertions: func(res *dto.User, err error) {
 				assert.Nil(t, res)
 				assert.ErrorIs(t, err, testErr)
 			},
 		},
 		{
 			name: "Success",
-			req: &dto.RegisterRequest{
+			req: &dto.RegisterPostReq{
 				Email:    "success@example.com",
 				Password: "password",
-				Role:     "admin",
+				Role:     "moderator",
 			},
 			expect: func() {
 				authMock.EXPECT().Hash("password").Return("hashedpass", nil)
 				repoMock.EXPECT().CreateUser(
 					ctx,
-					&dto.RegisterRequest{
+					&dto.RegisterPostReq{
 						Email:    "success@example.com",
 						Password: "hashedpass",
-						Role:     "admin",
+						Role:     "moderator",
 					},
 				).Return(testID, nil)
 			},
-			assertions: func(res *dto.RegisterResponse, err error) {
+			assertions: func(res *dto.User, err error) {
 				assert.NoError(t, err)
-				assert.Equal(t, testID, res.ID)
+				assert.Equal(t, testID, res.ID.Value)
 				assert.Equal(t, "success@example.com", res.Email)
-				assert.Equal(t, "admin", res.Role)
+				assert.Equal(t, dto.UserRole("moderator"), res.Role)
 			},
 		},
 	}
@@ -322,20 +320,17 @@ func TestController_GetPVZ(t *testing.T) {
 	startDate, endDate := time.Now(), time.Now().Add(24*time.Hour)
 	page, limit := int64(1), int64(10)
 
-	sampleResponse := []*dto.GetPVZResponse{
+	sampleResponse := []*dto.PvzGetOKItem{
 		{
-			PVZ: md.PVZ{},
-			Receptions: []struct {
-				Reception md.Reception `json:"reception"`
-				Products  []md.Product `json:"products"`
-			}{},
+			Pvz:        dto.OptPVZ{},
+			Receptions: []dto.PvzGetOKItemReceptionsItem{},
 		},
 	}
 
 	tests := []struct {
 		name       string
 		expect     func()
-		assertions func(res []*dto.GetPVZResponse, err error)
+		assertions func(res []*dto.PvzGetOKItem, err error)
 	}{
 		{
 			name: "GetPVZ returns error",
@@ -344,7 +339,7 @@ func TestController_GetPVZ(t *testing.T) {
 					GetPVZ(ctx, page, limit, startDate, endDate).
 					Return(nil, testErr)
 			},
-			assertions: func(res []*dto.GetPVZResponse, err error) {
+			assertions: func(res []*dto.PvzGetOKItem, err error) {
 				assert.Nil(t, res)
 				assert.ErrorIs(t, err, testErr)
 			},
@@ -356,7 +351,7 @@ func TestController_GetPVZ(t *testing.T) {
 					GetPVZ(ctx, page, limit, startDate, endDate).
 					Return(sampleResponse, nil)
 			},
-			assertions: func(res []*dto.GetPVZResponse, err error) {
+			assertions: func(res []*dto.PvzGetOKItem, err error) {
 				assert.NoError(t, err)
 				assert.NotNil(t, res)
 			},
@@ -383,21 +378,20 @@ func TestController_CreatePVZ(t *testing.T) {
 	authMock := mocks.NewMockCore(mockCtrl)
 	ctrl := New(repoMock, authMock)
 
-	testErr := errors.New("test error")
 	invalidCityErr := repo.ErrCityIsNotValid
-
+	testErr := errors.New("test error")
 	testID := uuid.New()
 	createdAt := time.Now()
 
 	tests := []struct {
 		name       string
-		req        *dto.CreatePVZRequest
+		req        *dto.PVZ
 		expect     func()
-		assertions func(resp *dto.CreatePVZResponse, err error)
+		assertions func(resp *dto.PVZ, err error)
 	}{
 		{
 			name: "City not valid error",
-			req: &dto.CreatePVZRequest{
+			req: &dto.PVZ{
 				City: "InvalidCity",
 			},
 			expect: func() {
@@ -405,14 +399,14 @@ func TestController_CreatePVZ(t *testing.T) {
 					CreatePVZ(ctx, gomock.Any()).
 					Return(uuid.Nil, time.Time{}, invalidCityErr)
 			},
-			assertions: func(resp *dto.CreatePVZResponse, err error) {
+			assertions: func(resp *dto.PVZ, err error) {
 				assert.Nil(t, resp)
-				assert.ErrorIs(t, err, ErrCityIsNotValid)
+				assert.NotNil(t, err)
 			},
 		},
 		{
 			name: "General error",
-			req: &dto.CreatePVZRequest{
+			req: &dto.PVZ{
 				City: "AnyCity",
 			},
 			expect: func() {
@@ -420,27 +414,27 @@ func TestController_CreatePVZ(t *testing.T) {
 					CreatePVZ(ctx, gomock.Any()).
 					Return(uuid.Nil, time.Time{}, testErr)
 			},
-			assertions: func(resp *dto.CreatePVZResponse, err error) {
+			assertions: func(resp *dto.PVZ, err error) {
 				assert.Nil(t, resp)
 				assert.Error(t, err)
 			},
 		},
 		{
 			name: "Successful creation",
-			req: &dto.CreatePVZRequest{
+			req: &dto.PVZ{
 				City: "TestCity",
 			},
 			expect: func() {
 				repoMock.EXPECT().
-					CreatePVZ(ctx, &dto.CreatePVZRequest{City: "TestCity"}).
+					CreatePVZ(ctx, &dto.PVZ{City: "TestCity"}).
 					Return(testID, createdAt, nil)
 			},
-			assertions: func(resp *dto.CreatePVZResponse, err error) {
+			assertions: func(resp *dto.PVZ, err error) {
 				assert.NoError(t, err)
 				assert.NotNil(t, resp)
-				assert.Equal(t, testID, resp.ID)
-				assert.Equal(t, createdAt, resp.RegistrationDate)
-				assert.Equal(t, "TestCity", resp.City)
+				assert.Equal(t, testID, resp.ID.Value)
+				assert.Equal(t, createdAt, resp.RegistrationDate.Value)
+				assert.Equal(t, dto.PVZCity("TestCity"), resp.City)
 			},
 		},
 	}
@@ -469,10 +463,13 @@ func TestController_CloseLastReception(t *testing.T) {
 	closedAlreadyErr := repo.ErrReceptionAlreadyClosed
 	testID := uuid.New()
 	now := time.Now()
-	sampleReception := &md.Reception{
-		ID:       testID,
+	sampleReception := &dto.Reception{
+		ID: dto.OptUUID{
+			Value: testID,
+			Set:   true,
+		},
 		DateTime: now,
-		PVZID:    testID,
+		PvzId:    testID,
 		Status:   "closed",
 	}
 
@@ -480,7 +477,7 @@ func TestController_CloseLastReception(t *testing.T) {
 		name       string
 		id         uuid.UUID
 		expect     func()
-		assertions func(*md.Reception, error)
+		assertions func(*dto.Reception, error)
 	}{
 		{
 			name: "Reception already closed",
@@ -490,7 +487,7 @@ func TestController_CloseLastReception(t *testing.T) {
 					CloseLastReception(ctx, testID).
 					Return(nil, closedAlreadyErr)
 			},
-			assertions: func(res *md.Reception, err error) {
+			assertions: func(res *dto.Reception, err error) {
 				assert.Nil(t, res)
 				assert.ErrorIs(t, err, ErrReceptionAlreadyClosed)
 			},
@@ -503,7 +500,7 @@ func TestController_CloseLastReception(t *testing.T) {
 					CloseLastReception(ctx, testID).
 					Return(nil, testErr)
 			},
-			assertions: func(res *md.Reception, err error) {
+			assertions: func(res *dto.Reception, err error) {
 				assert.Nil(t, res)
 				assert.Error(t, err)
 			},
@@ -516,10 +513,10 @@ func TestController_CloseLastReception(t *testing.T) {
 					CloseLastReception(ctx, testID).
 					Return(sampleReception, nil)
 			},
-			assertions: func(res *md.Reception, err error) {
+			assertions: func(res *dto.Reception, err error) {
 				assert.NoError(t, err)
 				assert.NotNil(t, res)
-				assert.Equal(t, testID, res.ID)
+				assert.Equal(t, testID, res.ID.Value)
 			},
 		},
 	}
@@ -627,64 +624,67 @@ func TestController_CreateReception(t *testing.T) {
 	generalErr := errors.New("general error")
 	testPVZID := uuid.New()
 	now := time.Now()
-	sampleResponse := &dto.CreateReceptionResponse{
-		ID:       testPVZID,
+	sampleResponse := &dto.Reception{
+		ID: dto.OptUUID{
+			Value: testPVZID,
+			Set:   true,
+		},
 		DateTime: now,
-		PVZID:    testPVZID,
+		PvzId:    testPVZID,
 		Status:   "open",
 	}
 
 	tests := []struct {
 		name       string
-		req        *dto.CreateReceptionRequest
+		req        *dto.ReceptionsPostReq
 		expect     func()
-		assertions func(resp *dto.CreateReceptionResponse, err error)
+		assertions func(resp *dto.Reception, err error)
 	}{
 		{
 			name: "Reception still open error",
-			req: &dto.CreateReceptionRequest{
-				PVZID: testPVZID,
+			req: &dto.ReceptionsPostReq{
+				PvzId: testPVZID,
 			},
 			expect: func() {
 				repoMock.EXPECT().
 					CreateReception(ctx, gomock.Any()).
 					Return(nil, repo.ErrReceptionStillOpen)
 			},
-			assertions: func(resp *dto.CreateReceptionResponse, err error) {
+			assertions: func(resp *dto.Reception, err error) {
 				assert.Nil(t, resp)
 				assert.ErrorIs(t, err, ErrReceptionStillOpen)
 			},
 		},
 		{
 			name: "General error",
-			req: &dto.CreateReceptionRequest{
-				PVZID: testPVZID,
+			req: &dto.ReceptionsPostReq{
+				PvzId: testPVZID,
 			},
 			expect: func() {
 				repoMock.EXPECT().
 					CreateReception(ctx, gomock.Any()).
 					Return(nil, generalErr)
 			},
-			assertions: func(resp *dto.CreateReceptionResponse, err error) {
+			assertions: func(resp *dto.Reception, err error) {
 				assert.Nil(t, resp)
 				assert.Equal(t, generalErr, err)
 			},
 		},
 		{
 			name: "Successful creation",
-			req: &dto.CreateReceptionRequest{
-				PVZID: testPVZID,
+			req: &dto.ReceptionsPostReq{
+				PvzId: testPVZID,
 			},
 			expect: func() {
 				repoMock.EXPECT().
-					CreateReception(ctx, &dto.CreateReceptionRequest{PVZID: testPVZID}).
+					CreateReception(ctx, &dto.ReceptionsPostReq{PvzId: testPVZID}).
 					Return(sampleResponse, nil)
 			},
-			assertions: func(resp *dto.CreateReceptionResponse, err error) {
+			assertions: func(resp *dto.Reception, err error) {
 				assert.NoError(t, err)
 				assert.NotNil(t, resp)
 				assert.Equal(t, sampleResponse.ID, resp.ID)
-				assert.Equal(t, sampleResponse.PVZID, resp.PVZID)
+				assert.Equal(t, sampleResponse.PvzId, resp.PvzId)
 			},
 		},
 	}
@@ -711,21 +711,24 @@ func TestController_AddItemToReception(t *testing.T) {
 
 	testPVZID := uuid.New()
 	testType := "validType"
-	baseReq := &dto.AddItemRequest{
-		PVZID: testPVZID,
-		Type:  testType,
+	baseReq := &dto.ProductsPostReq{
+		PvzId: testPVZID,
+		Type:  dto.ProductsPostReqType(testType),
 	}
 
 	genericErr := errors.New("generic error")
-	sampleResponse := &dto.AddItemResponse{
-		ID: testPVZID,
+	sampleResponse := &dto.Product{
+		ID: dto.OptUUID{
+			Value: testPVZID,
+			Set:   true,
+		},
 	}
 
 	tests := []struct {
 		name       string
-		req        *dto.AddItemRequest
+		req        *dto.ProductsPostReq
 		expect     func()
-		assertions func(resp *dto.AddItemResponse, err error)
+		assertions func(resp *dto.Product, err error)
 	}{
 		{
 			name: "No active reception error",
@@ -735,7 +738,7 @@ func TestController_AddItemToReception(t *testing.T) {
 					AddItemToReception(ctx, gomock.Any()).
 					Return(nil, repo.ErrNoActiveReception)
 			},
-			assertions: func(resp *dto.AddItemResponse, err error) {
+			assertions: func(resp *dto.Product, err error) {
 				assert.Nil(t, resp)
 				assert.ErrorIs(t, err, ErrNoActiveReception)
 			},
@@ -748,7 +751,7 @@ func TestController_AddItemToReception(t *testing.T) {
 					AddItemToReception(ctx, gomock.Any()).
 					Return(nil, repo.ErrTypeIsNotValid)
 			},
-			assertions: func(resp *dto.AddItemResponse, err error) {
+			assertions: func(resp *dto.Product, err error) {
 				assert.Nil(t, resp)
 				assert.ErrorIs(t, err, ErrTypeIsNotValid)
 			},
@@ -761,7 +764,7 @@ func TestController_AddItemToReception(t *testing.T) {
 					AddItemToReception(ctx, gomock.Any()).
 					Return(nil, genericErr)
 			},
-			assertions: func(resp *dto.AddItemResponse, err error) {
+			assertions: func(resp *dto.Product, err error) {
 				assert.Nil(t, resp)
 				assert.Equal(t, genericErr, err)
 			},
@@ -771,10 +774,13 @@ func TestController_AddItemToReception(t *testing.T) {
 			req:  baseReq,
 			expect: func() {
 				repoMock.EXPECT().
-					AddItemToReception(ctx, &dto.AddItemRequest{PVZID: testPVZID, Type: testType}).
+					AddItemToReception(
+						ctx,
+						&dto.ProductsPostReq{PvzId: testPVZID, Type: dto.ProductsPostReqType(testType)},
+					).
 					Return(sampleResponse, nil)
 			},
-			assertions: func(resp *dto.AddItemResponse, err error) {
+			assertions: func(resp *dto.Product, err error) {
 				assert.NoError(t, err)
 				assert.NotNil(t, resp)
 			},

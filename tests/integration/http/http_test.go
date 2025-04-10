@@ -9,12 +9,15 @@ import (
 	"github.com/JMURv/avito-spring/internal/auth"
 	"github.com/JMURv/avito-spring/internal/config"
 	"github.com/JMURv/avito-spring/internal/ctrl"
-	"github.com/JMURv/avito-spring/internal/dto"
+	dto "github.com/JMURv/avito-spring/internal/dto/gen"
 	hdl "github.com/JMURv/avito-spring/internal/hdl/http"
+	mid "github.com/JMURv/avito-spring/internal/hdl/http/middleware"
 	"github.com/JMURv/avito-spring/internal/repo/db"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -37,9 +40,13 @@ func setupTestServer() (*httptest.Server, func()) {
 	repo := db.New(conf)
 	svc := ctrl.New(repo, au)
 	h := hdl.New(svc, au)
-
-	mux := http.NewServeMux()
-	hdl.RegisterRoutes(mux, h, au)
+	h.Router.Use(
+		middleware.RequestID,
+		middleware.RealIP,
+		middleware.Recoverer,
+		mid.PromMetrics,
+	)
+	h.RegisterRoutes()
 
 	cleanupFunc := func() {
 		conn, err := sqlx.Open(
@@ -92,7 +99,7 @@ func setupTestServer() (*httptest.Server, func()) {
 		}
 	}
 
-	return httptest.NewServer(mux), cleanupFunc
+	return httptest.NewServer(h.Router), cleanupFunc
 }
 
 func TestFullReceptionFlow(t *testing.T) {
@@ -102,7 +109,7 @@ func TestFullReceptionFlow(t *testing.T) {
 	client := srv.Client()
 
 	// Регистрация модератора
-	registerMod := dto.RegisterRequest{
+	registerMod := dto.RegisterPostReq{
 		Email:    "mod@avito.ru",
 		Password: "password",
 		Role:     "moderator",
@@ -115,7 +122,7 @@ func TestFullReceptionFlow(t *testing.T) {
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 
 	// Логин модератора
-	loginMod := dto.LoginRequest{
+	loginMod := dto.LoginPostReq{
 		Email:    "mod@avito.ru",
 		Password: "password",
 	}
@@ -126,18 +133,14 @@ func TestFullReceptionFlow(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var loginResp dto.LoginResponse
-	require.NoError(t, json.NewDecoder(resp.Body).Decode(&loginResp))
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
 	resp.Body.Close()
-
-	authHeader := "Bearer " + loginResp.Token
+	tokenStr := strings.TrimSpace(string(body))
+	authHeader := "Bearer " + tokenStr
 
 	// Создание ПВЗ
-	pvzReq := dto.CreatePVZRequest{City: "Москва"}
-	buf, err = json.Marshal(pvzReq)
-	require.NoError(t, err)
-
-	req, err := http.NewRequest(http.MethodPost, srv.URL+"/pvz", bytes.NewReader(buf))
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/pvz", strings.NewReader(`{"city": "Москва"}`))
 	require.NoError(t, err)
 
 	req.Header.Set("Authorization", authHeader)
@@ -146,12 +149,12 @@ func TestFullReceptionFlow(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 
-	var pvzRes dto.CreatePVZResponse
+	var pvzRes dto.PVZ
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&pvzRes))
 	resp.Body.Close()
 
 	// Регистрация сотрудника
-	registerEmp := dto.RegisterRequest{
+	registerEmp := dto.RegisterPostReq{
 		Email:    "emp@avito.ru",
 		Password: "password",
 		Role:     "employee",
@@ -163,7 +166,7 @@ func TestFullReceptionFlow(t *testing.T) {
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 
 	// Логин сотрудника
-	loginEmp := dto.LoginRequest{
+	loginEmp := dto.LoginPostReq{
 		Email:    "emp@avito.ru",
 		Password: "password",
 	}
@@ -173,12 +176,14 @@ func TestFullReceptionFlow(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	require.NoError(t, json.NewDecoder(resp.Body).Decode(&loginResp))
+	body, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
 	resp.Body.Close()
-	authHeader = "Bearer " + loginResp.Token
+	tokenStr = strings.TrimSpace(string(body))
+	authHeader = "Bearer " + tokenStr
 
 	// 6. Создание приёмки
-	recReq := dto.CreateReceptionRequest{PVZID: pvzRes.ID}
+	recReq := dto.ReceptionsPostReq{PvzId: pvzRes.ID.Value}
 	buf, err = json.Marshal(recReq)
 	require.NoError(t, err)
 	req, err = http.NewRequest(http.MethodPost, srv.URL+"/receptions", bytes.NewReader(buf))
@@ -192,9 +197,9 @@ func TestFullReceptionFlow(t *testing.T) {
 
 	// Добавление 50 товаров
 	for i := 0; i < 50; i++ {
-		addReq := dto.AddItemRequest{
+		addReq := dto.ProductsPostReq{
 			Type:  "электроника",
-			PVZID: pvzRes.ID,
+			PvzId: pvzRes.ID.Value,
 		}
 		buf, err = json.Marshal(addReq)
 		require.NoError(t, err)
@@ -209,7 +214,7 @@ func TestFullReceptionFlow(t *testing.T) {
 	}
 
 	// Закрытие приёмки
-	url := fmt.Sprintf("/pvz/%s/close_last_reception", pvzRes.ID.String())
+	url := fmt.Sprintf("/pvz/%s/close_last_reception", pvzRes.ID.Value.String())
 	req, err = http.NewRequest(http.MethodPost, srv.URL+url, nil)
 	require.NoError(t, err)
 	req.Header.Set("Authorization", authHeader)

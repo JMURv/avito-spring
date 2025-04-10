@@ -13,7 +13,7 @@ tasks:
   dc-down:
     desc: Shutdown compose
     cmds:
-      - "docker compose -f compose/dc.dev.yaml down"
+      - "docker compose -f compose/dc.yaml down"
 
   dc-test:
     desc: Run integration tests helper containers

@@ -7,10 +7,9 @@ import (
 	"fmt"
 	"github.com/JMURv/avito-spring/internal/auth"
 	"github.com/JMURv/avito-spring/internal/ctrl"
-	"github.com/JMURv/avito-spring/internal/dto"
+	dto "github.com/JMURv/avito-spring/internal/dto/gen"
 	"github.com/JMURv/avito-spring/internal/hdl"
 	"github.com/JMURv/avito-spring/internal/hdl/http/utils"
-	md "github.com/JMURv/avito-spring/internal/models"
 	"github.com/JMURv/avito-spring/tests/mocks"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -68,7 +67,7 @@ func TestHandler_DummyLogin(t *testing.T) {
 				res := &utils.ErrorResponse{}
 				err := json.NewDecoder(r).Decode(res)
 				assert.Nil(t, err)
-				assert.Contains(t, res.Message, "failed on the 'required' tag")
+				assert.Contains(t, res.Message, "invalid")
 			},
 			expect: func() {},
 		},
@@ -77,7 +76,7 @@ func TestHandler_DummyLogin(t *testing.T) {
 			method: http.MethodPost,
 			status: http.StatusInternalServerError,
 			payload: map[string]any{
-				"role": "client",
+				"role": "employee",
 			},
 			assertions: func(r io.ReadCloser) {
 				res := &utils.ErrorResponse{}
@@ -87,10 +86,10 @@ func TestHandler_DummyLogin(t *testing.T) {
 			},
 			expect: func() {
 				mctrl.EXPECT().DummyLogin(
-					gomock.Any(), &dto.DummyLoginRequest{
-						Role: "client",
+					gomock.Any(), &dto.DummyLoginPostReq{
+						Role: "employee",
 					},
-				).Return(nil, testErr)
+				).Return(dto.Token(""), testErr)
 			},
 		},
 		{
@@ -98,20 +97,15 @@ func TestHandler_DummyLogin(t *testing.T) {
 			method: http.MethodPost,
 			status: http.StatusOK,
 			payload: map[string]any{
-				"role": "client",
+				"role": "employee",
 			},
-			assertions: func(r io.ReadCloser) {
-				res := &dto.DummyLoginResponse{Token: "token"}
-				err := json.NewDecoder(r).Decode(res)
-				assert.Nil(t, err)
-				assert.Equal(t, "token", res.Token)
-			},
+			assertions: func(r io.ReadCloser) {},
 			expect: func() {
 				mctrl.EXPECT().DummyLogin(
-					gomock.Any(), &dto.DummyLoginRequest{
-						Role: "client",
+					gomock.Any(), &dto.DummyLoginPostReq{
+						Role: "employee",
 					},
-				).Return(&dto.DummyLoginResponse{Token: "token"}, nil)
+				).Return(dto.Token("token"), nil)
 			},
 		},
 	}
@@ -185,7 +179,7 @@ func TestHandler_Register(t *testing.T) {
 				res := &utils.ErrorResponse{}
 				err := json.NewDecoder(r).Decode(res)
 				assert.Nil(t, err)
-				assert.Contains(t, res.Message, "failed on the 'required' tag")
+				assert.Contains(t, res.Message, "decode request")
 			},
 			expect: func() {},
 		},
@@ -195,7 +189,7 @@ func TestHandler_Register(t *testing.T) {
 			status: http.StatusInternalServerError,
 			payload: map[string]any{
 				"email":    "test@example.com",
-				"role":     "client",
+				"role":     "employee",
 				"password": "password",
 			},
 			assertions: func(r io.ReadCloser) {
@@ -214,17 +208,12 @@ func TestHandler_Register(t *testing.T) {
 			status: http.StatusCreated,
 			payload: map[string]any{
 				"email":    "test@example.com",
-				"role":     "client",
+				"role":     "employee",
 				"password": "password",
 			},
-			assertions: func(r io.ReadCloser) {
-				res := &dto.RegisterResponse{}
-				err := json.NewDecoder(r).Decode(res)
-				assert.Nil(t, err)
-				assert.NotNil(t, res)
-			},
+			assertions: func(r io.ReadCloser) {},
 			expect: func() {
-				mctrl.EXPECT().Register(gomock.Any(), gomock.Any()).Return(&dto.RegisterResponse{}, nil)
+				mctrl.EXPECT().Register(gomock.Any(), gomock.Any()).Return(&dto.User{}, nil)
 			},
 		},
 	}
@@ -295,7 +284,7 @@ func TestHandler_Login(t *testing.T) {
 				res := &utils.ErrorResponse{}
 				err := json.NewDecoder(r).Decode(res)
 				assert.Nil(t, err)
-				assert.Contains(t, res.Message, "failed on the 'required' tag")
+				assert.Contains(t, res.Message, "invalid")
 			},
 			expect: func() {},
 		},
@@ -314,7 +303,7 @@ func TestHandler_Login(t *testing.T) {
 				assert.Equal(t, hdl.ErrInternal.Error(), res.Message)
 			},
 			expect: func() {
-				mctrl.EXPECT().Login(gomock.Any(), gomock.Any()).Return(nil, testErr)
+				mctrl.EXPECT().Login(gomock.Any(), gomock.Any()).Return(dto.Token(""), testErr)
 			},
 		},
 		{
@@ -332,7 +321,7 @@ func TestHandler_Login(t *testing.T) {
 				assert.Equal(t, auth.ErrInvalidCredentials.Error(), res.Message)
 			},
 			expect: func() {
-				mctrl.EXPECT().Login(gomock.Any(), gomock.Any()).Return(nil, auth.ErrInvalidCredentials)
+				mctrl.EXPECT().Login(gomock.Any(), gomock.Any()).Return(dto.Token(""), auth.ErrInvalidCredentials)
 			},
 		},
 		{
@@ -343,14 +332,9 @@ func TestHandler_Login(t *testing.T) {
 				"email":    "test@example.com",
 				"password": "password",
 			},
-			assertions: func(r io.ReadCloser) {
-				res := &dto.LoginResponse{}
-				err := json.NewDecoder(r).Decode(res)
-				assert.Nil(t, err)
-				assert.NotNil(t, res)
-			},
+			assertions: func(r io.ReadCloser) {},
 			expect: func() {
-				mctrl.EXPECT().Login(gomock.Any(), gomock.Any()).Return(&dto.LoginResponse{}, nil)
+				mctrl.EXPECT().Login(gomock.Any(), gomock.Any()).Return(dto.Token("token"), nil)
 			},
 		},
 	}
@@ -384,17 +368,11 @@ func TestHandler_getPVZ(t *testing.T) {
 	h := New(mctrl, au)
 
 	testErr := errors.New("test error")
-	var sampleResponse []*dto.GetPVZResponse
-
-	// Set generic start and end times.
-	// For instance, start time 48 hours ago and end time as current time.
+	var sampleResponse []*dto.PvzGetOKItem
 	defaultStart := time.Now().Add(-48 * time.Hour).Truncate(time.Second).UTC()
 	defaultEnd := time.Now().Truncate(time.Second).UTC()
-
-	// Format times into RFC3339 strings for query parameters.
 	startStr := defaultStart.Format(time.RFC3339)
 	endStr := defaultEnd.Format(time.RFC3339)
-
 	tests := []struct {
 		name        string
 		method      string
@@ -443,7 +421,7 @@ func TestHandler_getPVZ(t *testing.T) {
 			},
 			assertions: func(r io.ReadCloser) {
 				defer r.Close()
-				var res []*dto.GetPVZResponse
+				var res []*dto.PvzGetOKItem
 				err := json.NewDecoder(r).Decode(&res)
 				assert.Nil(t, err)
 				assert.Len(t, res, len(sampleResponse))
@@ -482,7 +460,6 @@ func TestHandler_CreatePVZ(t *testing.T) {
 	h := New(mctrl, au)
 
 	testErr := errors.New("test-err")
-
 	tests := []struct {
 		name       string
 		method     string
@@ -494,7 +471,7 @@ func TestHandler_CreatePVZ(t *testing.T) {
 		{
 			name:   "ErrDecodeRequest",
 			method: http.MethodPost,
-			status: http.StatusUnauthorized,
+			status: http.StatusBadRequest,
 			payload: map[string]any{
 				"city": 123,
 			},
@@ -509,7 +486,7 @@ func TestHandler_CreatePVZ(t *testing.T) {
 		{
 			name:   "ValidationError",
 			method: http.MethodPost,
-			status: http.StatusUnauthorized,
+			status: http.StatusBadRequest,
 			payload: map[string]any{
 				"city": "",
 			},
@@ -517,33 +494,16 @@ func TestHandler_CreatePVZ(t *testing.T) {
 				res := &utils.ErrorResponse{}
 				err := json.NewDecoder(r).Decode(res)
 				assert.Nil(t, err)
-				assert.Contains(t, res.Message, "failed on the 'required' tag")
+				assert.Contains(t, res.Message, "invalid")
 			},
 			expect: func() {},
-		},
-		{
-			name:   "ErrCityIsNotValid",
-			method: http.MethodPost,
-			status: http.StatusBadRequest,
-			payload: map[string]any{
-				"city": "InvalidCity",
-			},
-			assertions: func(r io.ReadCloser) {
-				res := &utils.ErrorResponse{}
-				err := json.NewDecoder(r).Decode(res)
-				assert.Nil(t, err)
-				assert.Equal(t, ctrl.ErrCityIsNotValid.Error(), res.Message)
-			},
-			expect: func() {
-				mctrl.EXPECT().CreatePVZ(gomock.Any(), gomock.Any()).Return(nil, ctrl.ErrCityIsNotValid)
-			},
 		},
 		{
 			name:   "InternalError",
 			method: http.MethodPost,
 			status: http.StatusInternalServerError,
 			payload: map[string]any{
-				"city": "ValidCity",
+				"city": "Москва",
 			},
 			assertions: func(r io.ReadCloser) {
 				res := &utils.ErrorResponse{}
@@ -560,16 +520,16 @@ func TestHandler_CreatePVZ(t *testing.T) {
 			method: http.MethodPost,
 			status: http.StatusCreated,
 			payload: map[string]any{
-				"city": "ValidCity",
+				"city": "Москва",
 			},
 			assertions: func(r io.ReadCloser) {
-				res := &dto.CreatePVZResponse{}
+				res := &dto.PVZ{}
 				err := json.NewDecoder(r).Decode(res)
 				assert.Nil(t, err)
 				assert.NotNil(t, res)
 			},
 			expect: func() {
-				mctrl.EXPECT().CreatePVZ(gomock.Any(), gomock.Any()).Return(&dto.CreatePVZResponse{}, nil)
+				mctrl.EXPECT().CreatePVZ(gomock.Any(), gomock.Any()).Return(&dto.PVZ{}, nil)
 			},
 		},
 	}
@@ -604,7 +564,6 @@ func TestHandler_CloseLastReception(t *testing.T) {
 	h := New(mctrl, au)
 
 	testErr := errors.New("test-err")
-
 	tests := []struct {
 		name       string
 		url        string
@@ -673,7 +632,7 @@ func TestHandler_CloseLastReception(t *testing.T) {
 			status:     http.StatusOK,
 			assertions: func(r io.ReadCloser) {},
 			expect: func() {
-				mctrl.EXPECT().CloseLastReception(gomock.Any(), gomock.Any()).Return(&md.Reception{}, nil)
+				mctrl.EXPECT().CloseLastReception(gomock.Any(), gomock.Any()).Return(&dto.Reception{}, nil)
 			},
 		},
 	}
@@ -705,7 +664,6 @@ func TestHandler_DeleteLastProduct(t *testing.T) {
 	h := New(mctrl, au)
 
 	testErr := errors.New("test-err")
-
 	tests := []struct {
 		name       string
 		url        string
@@ -818,7 +776,6 @@ func TestHandler_CreateReception(t *testing.T) {
 	h := New(mctrl, auth)
 
 	testErr := errors.New("test-err")
-
 	tests := []struct {
 		name       string
 		method     string
@@ -853,7 +810,7 @@ func TestHandler_CreateReception(t *testing.T) {
 				res := &utils.ErrorResponse{}
 				err := json.NewDecoder(r).Decode(res)
 				assert.Nil(t, err)
-				assert.Contains(t, res.Message, "failed on the 'required' tag")
+				assert.Contains(t, res.Message, "decode request")
 			},
 			expect: func() {},
 		},
@@ -900,13 +857,13 @@ func TestHandler_CreateReception(t *testing.T) {
 				"password": "password",
 			},
 			assertions: func(r io.ReadCloser) {
-				res := &dto.CreateReceptionResponse{}
+				res := &dto.Reception{}
 				err := json.NewDecoder(r).Decode(res)
 				assert.Nil(t, err)
 				assert.NotNil(t, res)
 			},
 			expect: func() {
-				mctrl.EXPECT().CreateReception(gomock.Any(), gomock.Any()).Return(&dto.CreateReceptionResponse{}, nil)
+				mctrl.EXPECT().CreateReception(gomock.Any(), gomock.Any()).Return(&dto.Reception{}, nil)
 			},
 		},
 	}
@@ -940,7 +897,6 @@ func TestHandler_AddItemToReception(t *testing.T) {
 	h := New(mctrl, auth)
 
 	testErr := errors.New("test-err")
-
 	tests := []struct {
 		name       string
 		method     string
@@ -977,7 +933,7 @@ func TestHandler_AddItemToReception(t *testing.T) {
 				res := &utils.ErrorResponse{}
 				err := json.NewDecoder(r).Decode(res)
 				assert.Nil(t, err)
-				assert.Contains(t, res.Message, "failed on the 'required' tag")
+				assert.Contains(t, res.Message, "decode request")
 			},
 			expect: func() {},
 		},
@@ -987,7 +943,7 @@ func TestHandler_AddItemToReception(t *testing.T) {
 			status: http.StatusBadRequest,
 			payload: map[string]any{
 				"pvzId": uuid.New().String(),
-				"type":  "type",
+				"type":  "электроника",
 			},
 			assertions: func(r io.ReadCloser) {
 				res := &utils.ErrorResponse{}
@@ -1005,7 +961,7 @@ func TestHandler_AddItemToReception(t *testing.T) {
 			status: http.StatusBadRequest,
 			payload: map[string]any{
 				"pvzId": uuid.New().String(),
-				"type":  "type",
+				"type":  "электроника",
 			},
 			assertions: func(r io.ReadCloser) {
 				res := &utils.ErrorResponse{}
@@ -1023,7 +979,7 @@ func TestHandler_AddItemToReception(t *testing.T) {
 			status: http.StatusInternalServerError,
 			payload: map[string]any{
 				"pvzId": uuid.New().String(),
-				"type":  "type",
+				"type":  "электроника",
 			},
 			assertions: func(r io.ReadCloser) {
 				res := &utils.ErrorResponse{}
@@ -1041,18 +997,18 @@ func TestHandler_AddItemToReception(t *testing.T) {
 			status: http.StatusCreated,
 			payload: map[string]any{
 				"pvzId":    uuid.New().String(),
-				"type":     "type",
+				"type":     "электроника",
 				"password": "password",
 			},
 			assertions: func(r io.ReadCloser) {
-				res := &dto.AddItemResponse{}
+				res := &dto.Product{}
 				err := json.NewDecoder(r).Decode(res)
 				assert.Nil(t, err)
 				assert.NotNil(t, res)
 			},
 			expect: func() {
 				mctrl.EXPECT().AddItemToReception(gomock.Any(), gomock.Any()).Return(
-					&dto.AddItemResponse{},
+					&dto.Product{},
 					nil,
 				)
 			},

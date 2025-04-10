@@ -34,5 +34,5 @@ type Product struct {
 	ID          uuid.UUID `json:"id" db:"id"`
 	DateTime    time.Time `json:"dateTime" db:"created_at"`
 	Type        string    `json:"type"`
-	ReceptionId uuid.UUID `json:"receptionId"`
+	ReceptionId uuid.UUID `json:"receptionId" db:"reception_id"`
 }

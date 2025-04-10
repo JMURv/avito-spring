@@ -6,7 +6,7 @@ import (
 	"github.com/JMURv/avito-spring/internal/auth"
 	"github.com/JMURv/avito-spring/internal/ctrl"
 	mid "github.com/JMURv/avito-spring/internal/hdl/http/middleware"
-	"github.com/go-chi/chi/v5"
+	chi "github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"go.uber.org/zap"
 	"net/http"
@@ -14,7 +14,7 @@ import (
 )
 
 type Handler struct {
-	router *chi.Mux
+	Router *chi.Mux
 	srv    *http.Server
 	ctrl   ctrl.AppCtrl
 	au     auth.Core
@@ -23,14 +23,14 @@ type Handler struct {
 func New(ctrl ctrl.AppCtrl, au auth.Core) *Handler {
 	r := chi.NewRouter()
 	return &Handler{
-		router: r,
+		Router: r,
 		ctrl:   ctrl,
 		au:     au,
 	}
 }
 
 func (h *Handler) Start(port int) {
-	h.router.Use(
+	h.Router.Use(
 		middleware.RequestID,
 		middleware.RealIP,
 		middleware.Recoverer,
@@ -38,9 +38,9 @@ func (h *Handler) Start(port int) {
 		mid.PromMetrics,
 	)
 
-	h.registerRoutes()
+	h.RegisterRoutes()
 	h.srv = &http.Server{
-		Handler:      h.router,
+		Handler:      h.Router,
 		Addr:         fmt.Sprintf(":%v", port),
 		WriteTimeout: 15 * time.Second,
 		ReadTimeout:  15 * time.Second,

@@ -4,7 +4,7 @@ import (
 	"errors"
 	"github.com/JMURv/avito-spring/internal/auth"
 	"github.com/JMURv/avito-spring/internal/ctrl"
-	"github.com/JMURv/avito-spring/internal/dto"
+	dto "github.com/JMURv/avito-spring/internal/dto/gen"
 	"github.com/JMURv/avito-spring/internal/hdl"
 	mid "github.com/JMURv/avito-spring/internal/hdl/http/middleware"
 	"github.com/JMURv/avito-spring/internal/hdl/http/utils"
@@ -18,17 +18,17 @@ import (
 	"time"
 )
 
-func (h *Handler) registerRoutes() {
-	h.router.Get(
+func (h *Handler) RegisterRoutes() {
+	h.Router.Get(
 		"/health", func(w http.ResponseWriter, r *http.Request) {
 			utils.SuccessResponse(w, http.StatusOK, "OK")
 		},
 	)
 
-	h.router.Post("/dummyLogin", h.dummyLogin)
-	h.router.Post("/register", h.register)
-	h.router.Post("/login", h.login)
-	h.router.Route(
+	h.Router.Post("/dummyLogin", h.dummyLogin)
+	h.Router.Post("/register", h.register)
+	h.Router.Post("/login", h.login)
+	h.Router.Route(
 		"/pvz", func(r chi.Router) {
 			r.With(mid.Auth(h.au, md.ModeratorRole, md.EmployeeRole)).Get("/", h.getPVZ)
 			r.With(mid.Auth(h.au, md.ModeratorRole)).Post("/", h.createPVZ)
@@ -42,13 +42,18 @@ func (h *Handler) registerRoutes() {
 		},
 	)
 
-	h.router.With(mid.Auth(h.au, md.EmployeeRole)).Post("/receptions", h.createReception)
-	h.router.With(mid.Auth(h.au, md.EmployeeRole)).Post("/products", h.addItemToReception)
+	h.Router.With(mid.Auth(h.au, md.EmployeeRole)).Post("/receptions", h.createReception)
+	h.Router.With(mid.Auth(h.au, md.EmployeeRole)).Post("/products", h.addItemToReception)
 }
 
 func (h *Handler) dummyLogin(w http.ResponseWriter, r *http.Request) {
-	req := &dto.DummyLoginRequest{}
-	if err := utils.ParseAndValidate(r, req); err != nil {
+	req := &dto.DummyLoginPostReq{}
+	if err := utils.Parse(r, req); err != nil {
+		utils.ErrResponse(w, http.StatusBadRequest, err)
+		return
+	}
+
+	if err := req.Validate(); err != nil {
 		utils.ErrResponse(w, http.StatusBadRequest, err)
 		return
 	}
@@ -59,12 +64,17 @@ func (h *Handler) dummyLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	utils.SuccessResponse(w, http.StatusOK, res)
+	utils.TextResponse(w, http.StatusOK, []byte(res))
 }
 
 func (h *Handler) register(w http.ResponseWriter, r *http.Request) {
-	req := &dto.RegisterRequest{}
-	if err := utils.ParseAndValidate(r, req); err != nil {
+	req := &dto.RegisterPostReq{}
+	if err := utils.Parse(r, req); err != nil {
+		utils.ErrResponse(w, http.StatusBadRequest, err)
+		return
+	}
+
+	if err := req.Validate(); err != nil {
 		utils.ErrResponse(w, http.StatusBadRequest, err)
 		return
 	}
@@ -79,8 +89,13 @@ func (h *Handler) register(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
-	req := &dto.LoginRequest{}
-	if err := utils.ParseAndValidate(r, req); err != nil {
+	req := &dto.LoginPostReq{}
+	if err := utils.Parse(r, req); err != nil {
+		utils.ErrResponse(w, http.StatusBadRequest, err)
+		return
+	}
+
+	if err := req.Validate(); err != nil {
 		utils.ErrResponse(w, http.StatusBadRequest, err)
 		return
 	}
@@ -95,7 +110,7 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	utils.SuccessResponse(w, http.StatusOK, res)
+	utils.TextResponse(w, http.StatusOK, []byte(res))
 }
 
 func (h *Handler) getPVZ(w http.ResponseWriter, r *http.Request) {
@@ -138,18 +153,19 @@ func (h *Handler) getPVZ(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) createPVZ(w http.ResponseWriter, r *http.Request) {
-	req := &dto.CreatePVZRequest{}
-	if err := utils.ParseAndValidate(r, req); err != nil {
-		utils.ErrResponse(w, http.StatusUnauthorized, err)
+	req := &dto.PVZ{}
+	if err := utils.Parse(r, req); err != nil {
+		utils.ErrResponse(w, http.StatusBadRequest, err)
+		return
+	}
+
+	if err := req.Validate(); err != nil {
+		utils.ErrResponse(w, http.StatusBadRequest, err)
 		return
 	}
 
 	res, err := h.ctrl.CreatePVZ(r.Context(), req)
 	if err != nil {
-		if errors.Is(err, ctrl.ErrCityIsNotValid) {
-			utils.ErrResponse(w, http.StatusBadRequest, err)
-			return
-		}
 		utils.ErrResponse(w, http.StatusInternalServerError, hdl.ErrInternal)
 		return
 	}
@@ -211,9 +227,14 @@ func (h *Handler) deleteLastProduct(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) createReception(w http.ResponseWriter, r *http.Request) {
-	req := &dto.CreateReceptionRequest{}
-	if err := utils.ParseAndValidate(r, req); err != nil {
+	req := &dto.ReceptionsPostReq{}
+	if err := utils.Parse(r, req); err != nil {
 		utils.ErrResponse(w, http.StatusBadRequest, err)
+		return
+	}
+
+	if req.PvzId == uuid.Nil {
+		utils.ErrResponse(w, http.StatusBadRequest, ErrInvalidPathSegments)
 		return
 	}
 
@@ -231,11 +252,17 @@ func (h *Handler) createReception(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) addItemToReception(w http.ResponseWriter, r *http.Request) {
-	req := &dto.AddItemRequest{}
-	if err := utils.ParseAndValidate(r, req); err != nil {
+	req := &dto.ProductsPostReq{}
+	if err := utils.Parse(r, req); err != nil {
 		utils.ErrResponse(w, http.StatusBadRequest, err)
 		return
 	}
+
+	if err := req.Validate(); err != nil {
+		utils.ErrResponse(w, http.StatusBadRequest, err)
+		return
+	}
+
 	res, err := h.ctrl.AddItemToReception(r.Context(), req)
 	if err != nil {
 		if errors.Is(err, ctrl.ErrNoActiveReception) || errors.Is(err, ctrl.ErrTypeIsNotValid) {

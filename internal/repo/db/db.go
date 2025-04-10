@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/JMURv/avito-spring/internal/config"
-	"github.com/JMURv/avito-spring/internal/dto"
+	dto "github.com/JMURv/avito-spring/internal/dto/gen"
 	md "github.com/JMURv/avito-spring/internal/models"
 	"github.com/JMURv/avito-spring/internal/repo"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
@@ -67,7 +67,7 @@ func (r *Repository) GetUserByEmail(ctx context.Context, email string) (*md.User
 	return &res, nil
 }
 
-func (r *Repository) CreateUser(ctx context.Context, req *dto.RegisterRequest) (uuid.UUID, error) {
+func (r *Repository) CreateUser(ctx context.Context, req *dto.RegisterPostReq) (uuid.UUID, error) {
 	var id uuid.UUID
 	err := r.conn.QueryRowContext(
 		ctx, createUser,
@@ -82,7 +82,7 @@ func (r *Repository) CreateUser(ctx context.Context, req *dto.RegisterRequest) (
 	return id, nil
 }
 
-func (r *Repository) CreatePVZ(ctx context.Context, req *dto.CreatePVZRequest) (uuid.UUID, time.Time, error) {
+func (r *Repository) CreatePVZ(ctx context.Context, req *dto.PVZ) (uuid.UUID, time.Time, error) {
 	var id uuid.UUID
 	var createdAt time.Time
 	err := r.conn.QueryRowContext(ctx, createPVZ, req.City).Scan(&id, &createdAt)
@@ -97,7 +97,7 @@ func (r *Repository) CreatePVZ(ctx context.Context, req *dto.CreatePVZRequest) (
 	return id, createdAt, nil
 }
 
-func (r *Repository) GetPVZ(ctx context.Context, page, limit int64, startDate, endDate time.Time) ([]*dto.GetPVZResponse, error) {
+func (r *Repository) GetPVZ(ctx context.Context, page, limit int64, startDate, endDate time.Time) ([]*dto.PvzGetOKItem, error) {
 	rows, err := r.conn.QueryxContext(ctx, getPVZ, startDate, endDate, limit, (page-1)*limit)
 	if err != nil {
 		return nil, err
@@ -109,7 +109,7 @@ func (r *Repository) GetPVZ(ctx context.Context, page, limit int64, startDate, e
 		}
 	}(rows)
 
-	pvzMap := make(map[string]*dto.GetPVZResponse)
+	pvzMap := make(map[string]*dto.PvzGetOKItem)
 	receptionMap := make(map[string]map[string]int)
 	for rows.Next() {
 		var (
@@ -140,18 +140,22 @@ func (r *Repository) GetPVZ(ctx context.Context, page, limit int64, startDate, e
 
 		pvzKey := pvzID.String()
 		if _, ok := pvzMap[pvzKey]; !ok {
-			pvzMap[pvzKey] = &dto.GetPVZResponse{
-				PVZ: md.PVZ{
-					ID:               pvzID,
-					City:             pvzCity,
-					RegistrationDate: pvzCreatedAt,
+			pvzMap[pvzKey] = &dto.PvzGetOKItem{
+				Pvz: dto.OptPVZ{
+					Set: true,
+					Value: dto.PVZ{
+						ID: dto.OptUUID{
+							Set:   true,
+							Value: pvzID,
+						},
+						City: dto.PVZCity(pvzCity),
+						RegistrationDate: dto.OptDateTime{
+							Set:   true,
+							Value: pvzCreatedAt,
+						},
+					},
 				},
-				Receptions: make(
-					[]struct {
-						Reception md.Reception `json:"reception"`
-						Products  []md.Product `json:"products"`
-					}, 0,
-				),
+				Receptions: make([]dto.PvzGetOKItemReceptionsItem, 0),
 			}
 			receptionMap[pvzKey] = make(map[string]int)
 		}
@@ -164,29 +168,44 @@ func (r *Repository) GetPVZ(ctx context.Context, page, limit int64, startDate, e
 		currPVZ := pvzMap[pvzKey]
 		if idx, ok := receptionMap[pvzKey][receptionKey]; ok {
 			currPVZ.Receptions[idx].Products = append(
-				currPVZ.Receptions[idx].Products, md.Product{
-					ID:          productID,
-					DateTime:    productDate,
-					Type:        productType,
+				currPVZ.Receptions[idx].Products, dto.Product{
+					ID: dto.OptUUID{
+						Set:   true,
+						Value: productID,
+					},
+					DateTime: dto.OptDateTime{
+						Set:   true,
+						Value: productDate,
+					},
+					Type:        dto.ProductType(productType),
 					ReceptionId: receptionID,
 				},
 			)
 		} else {
-			newReception := struct {
-				Reception md.Reception `json:"reception"`
-				Products  []md.Product `json:"products"`
-			}{
-				Reception: md.Reception{
-					ID:       receptionID,
-					DateTime: receptionDate,
-					PVZID:    pvzID,
-					Status:   receptionStatus,
+			newReception := dto.PvzGetOKItemReceptionsItem{
+				Reception: dto.OptReception{
+					Set: true,
+					Value: dto.Reception{
+						ID: dto.OptUUID{
+							Set:   true,
+							Value: receptionID,
+						},
+						DateTime: receptionDate,
+						PvzId:    pvzID,
+						Status:   dto.ReceptionStatus(receptionStatus),
+					},
 				},
-				Products: []md.Product{
+				Products: []dto.Product{
 					{
-						ID:          productID,
-						DateTime:    productDate,
-						Type:        productType,
+						ID: dto.OptUUID{
+							Set:   true,
+							Value: productID,
+						},
+						DateTime: dto.OptDateTime{
+							Set:   true,
+							Value: productDate,
+						},
+						Type:        dto.ProductType(productType),
 						ReceptionId: receptionID,
 					},
 				},
@@ -200,14 +219,14 @@ func (r *Repository) GetPVZ(ctx context.Context, page, limit int64, startDate, e
 		return nil, err
 	}
 
-	result := make([]*dto.GetPVZResponse, 0, len(pvzMap))
+	result := make([]*dto.PvzGetOKItem, 0, len(pvzMap))
 	for _, pvz := range pvzMap {
 		result = append(result, pvz)
 	}
 	return result, nil
 }
 
-func (r *Repository) CloseLastReception(ctx context.Context, id uuid.UUID) (*md.Reception, error) {
+func (r *Repository) CloseLastReception(ctx context.Context, id uuid.UUID) (*dto.Reception, error) {
 	tx, err := r.conn.BeginTxx(
 		ctx, &sql.TxOptions{
 			Isolation: sql.LevelRepeatableRead,
@@ -223,8 +242,8 @@ func (r *Repository) CloseLastReception(ctx context.Context, id uuid.UUID) (*md.
 		}
 	}(tx)
 
-	var reception md.Reception
-	err = tx.GetContext(ctx, &reception, findLastReception, id)
+	var res md.Reception
+	err = tx.GetContext(ctx, &res, findLastReceptionForUpdate, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, repo.ErrReceptionAlreadyClosed
@@ -232,7 +251,7 @@ func (r *Repository) CloseLastReception(ctx context.Context, id uuid.UUID) (*md.
 		return nil, err
 	}
 
-	_, err = tx.ExecContext(ctx, closeReception, reception.ID)
+	_, err = tx.ExecContext(ctx, closeReception, res.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -240,7 +259,16 @@ func (r *Repository) CloseLastReception(ctx context.Context, id uuid.UUID) (*md.
 	if err = tx.Commit(); err != nil {
 		return nil, err
 	}
-	return &reception, nil
+
+	return &dto.Reception{
+		ID: dto.OptUUID{
+			Set:   true,
+			Value: res.ID,
+		},
+		DateTime: res.DateTime,
+		PvzId:    res.PVZID,
+		Status:   dto.ReceptionStatus(res.Status),
+	}, nil
 }
 
 func (r *Repository) DeleteLastProduct(ctx context.Context, id uuid.UUID) error {
@@ -256,7 +284,7 @@ func (r *Repository) DeleteLastProduct(ctx context.Context, id uuid.UUID) error 
 	}(tx)
 
 	var reception md.Reception
-	err = tx.GetContext(ctx, &reception, findLastReceptionForUpdate, id)
+	err = tx.GetContext(ctx, &reception, findLastReception, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return repo.ErrNoActiveReception
@@ -279,7 +307,7 @@ func (r *Repository) DeleteLastProduct(ctx context.Context, id uuid.UUID) error 
 	return nil
 }
 
-func (r *Repository) CreateReception(ctx context.Context, req *dto.CreateReceptionRequest) (*dto.CreateReceptionResponse, error) {
+func (r *Repository) CreateReception(ctx context.Context, req *dto.ReceptionsPostReq) (*dto.Reception, error) {
 	tx, err := r.conn.BeginTxx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -290,8 +318,8 @@ func (r *Repository) CreateReception(ctx context.Context, req *dto.CreateRecepti
 		}
 	}(tx)
 
-	var res dto.CreateReceptionResponse
-	err = tx.GetContext(ctx, &res, findLastReceptionForUpdate, req.PVZID)
+	var res md.Reception
+	err = tx.GetContext(ctx, &res, findLastReceptionForUpdate, req.PvzId)
 	if err != nil {
 		if !errors.Is(err, sql.ErrNoRows) {
 			return nil, err
@@ -300,7 +328,7 @@ func (r *Repository) CreateReception(ctx context.Context, req *dto.CreateRecepti
 		return nil, repo.ErrReceptionStillOpen
 	}
 
-	err = r.conn.GetContext(ctx, &res, createReception, req.PVZID)
+	err = r.conn.GetContext(ctx, &res, createReception, req.PvzId)
 	if err != nil {
 		return nil, err
 	}
@@ -308,12 +336,21 @@ func (r *Repository) CreateReception(ctx context.Context, req *dto.CreateRecepti
 	if err = tx.Commit(); err != nil {
 		return nil, err
 	}
-	return &res, nil
+
+	return &dto.Reception{
+		ID: dto.OptUUID{
+			Set:   true,
+			Value: res.ID,
+		},
+		DateTime: res.DateTime,
+		PvzId:    res.PVZID,
+		Status:   dto.ReceptionStatus(res.Status),
+	}, nil
 }
 
-func (r *Repository) AddItemToReception(ctx context.Context, req *dto.AddItemRequest) (*dto.AddItemResponse, error) {
+func (r *Repository) AddItemToReception(ctx context.Context, req *dto.ProductsPostReq) (*dto.Product, error) {
 	var reception md.Reception
-	err := r.conn.GetContext(ctx, &reception, findLastReception, req.PVZID)
+	err := r.conn.GetContext(ctx, &reception, findLastReception, req.PvzId)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, repo.ErrNoActiveReception
@@ -321,7 +358,7 @@ func (r *Repository) AddItemToReception(ctx context.Context, req *dto.AddItemReq
 		return nil, err
 	}
 
-	var res dto.AddItemResponse
+	var res md.Product
 	err = r.conn.GetContext(ctx, &res, addItemToReception, reception.ID, req.Type)
 	if err != nil {
 		if pgErr, ok := err.(*pgconn.PgError); ok {
@@ -332,7 +369,18 @@ func (r *Repository) AddItemToReception(ctx context.Context, req *dto.AddItemReq
 		return nil, err
 	}
 
-	return &res, nil
+	return &dto.Product{
+		ID: dto.OptUUID{
+			Set:   true,
+			Value: res.ID,
+		},
+		DateTime: dto.OptDateTime{
+			Set:   true,
+			Value: res.DateTime,
+		},
+		Type:        dto.ProductType(res.Type),
+		ReceptionId: res.ReceptionId,
+	}, nil
 }
 
 func (r *Repository) GetPVZList(ctx context.Context) ([]*md.PVZ, error) {

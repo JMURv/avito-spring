@@ -3,7 +3,6 @@ package utils
 import (
 	"encoding/json"
 	"github.com/JMURv/avito-spring/internal/hdl"
-	"github.com/JMURv/avito-spring/internal/hdl/validation"
 	"go.uber.org/zap"
 	"net/http"
 )
@@ -15,6 +14,11 @@ type ErrorResponse struct {
 func StatusResponse(w http.ResponseWriter, statusCode int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
+}
+
+func TextResponse(w http.ResponseWriter, statusCode int, data []byte) {
+	w.WriteHeader(statusCode)
+	w.Write(data)
 }
 
 func SuccessResponse(w http.ResponseWriter, statusCode int, data any) {
@@ -33,7 +37,7 @@ func ErrResponse(w http.ResponseWriter, statusCode int, err error) {
 	)
 }
 
-func ParseAndValidate(r *http.Request, dst any) error {
+func Parse(r *http.Request, dst any) error {
 	var err error
 	if err = json.NewDecoder(r.Body).Decode(dst); err != nil {
 		zap.L().Debug(
@@ -41,10 +45,6 @@ func ParseAndValidate(r *http.Request, dst any) error {
 			zap.Error(err),
 		)
 		return hdl.ErrDecodeRequest
-	}
-
-	if err = validation.V.Struct(dst); err != nil {
-		return err
 	}
 
 	return nil
