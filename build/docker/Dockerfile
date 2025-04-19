@@ -12,12 +12,12 @@ RUN CGO_ENABLED=0 GOARCH=amd64 GOOS=linux go build -ldflags "-s -w -extldflags '
 RUN apk add upx
 RUN upx ./main
 
-FROM scratch
+FROM alpine:3.20 AS runner
 ENV MIGRATIONS_PATH=.
 
 COPY ./internal/repo/db/migration ./
 COPY --from=builder /app/main ./
-
+RUN apk add --no-cache curl
 EXPOSE 8080
 
 ENTRYPOINT ["/main"]
